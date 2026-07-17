@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: school_management_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secure_postgres_password_123
+      POSTGRES_DB: school_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: school_management_app
+    restart: always
+    ports:
+      - "8085:8085"
+    environment:
+      - DB_MODE=local
+      - LOCAL_DATABASE_URL=postgres://postgres:secure_postgres_password_123@db:5432/school_db
+      - DATABASE_URL=postgres://postgres:secure_postgres_password_123@db:5432/school_db
+      - SESSION_SECRET=production_ready_extremely_secure_key_session_456
+      - NODE_ENV=production
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

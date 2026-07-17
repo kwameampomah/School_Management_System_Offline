@@ -1,0 +1,40 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import authRouter from "./auth";
+import academicYearsRouter from "./academic-years";
+import termsRouter from "./terms";
+import classesRouter from "./classes";
+import subjectsRouter from "./subjects";
+import usersRouter from "./users";
+import teachersRouter from "./teachers";
+import studentsRouter from "./students";
+import assessmentComponentsRouter from "./assessment-components";
+import scoresRouter from "./scores";
+import gradingScalesRouter from "./grading-scales";
+import reportCardsRouter from "./report-cards";
+import dashboardRouter from "./dashboard";
+import studentTermMetadataRouter from "./student-term-metadata";
+import promotionsRouter from "./promotions";
+import notificationsRouter from "./notifications";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+router.use(authRouter);
+router.use(academicYearsRouter);
+router.use(termsRouter);
+router.use(classesRouter);
+router.use(subjectsRouter);
+router.use(usersRouter);
+router.use(teachersRouter);
+router.use(studentsRouter);
+router.use(assessmentComponentsRouter);
+router.use(scoresRouter);
+router.use(gradingScalesRouter);
+router.use(reportCardsRouter);
+router.use(dashboardRouter);
+router.use(studentTermMetadataRouter);
+router.use(promotionsRouter);
+router.use(notificationsRouter);
+
+export default router;

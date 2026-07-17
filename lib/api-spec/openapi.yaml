@@ -1,0 +1,1934 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: School Report Card Management System API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: academic-years
+    description: Academic year management
+  - name: terms
+    description: Term management
+  - name: classes
+    description: Class management
+  - name: subjects
+    description: Subject management
+  - name: users
+    description: User management
+  - name: teachers
+    description: Teacher management
+  - name: students
+    description: Student management
+  - name: assessment-components
+    description: Assessment component configuration
+  - name: scores
+    description: Score entry and management
+  - name: grading-scales
+    description: Grading scale configuration
+  - name: report-cards
+    description: Report card generation and workflow
+  - name: dashboard
+    description: Dashboard summaries
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── AUTH ──────────────────────────────────────────────────────────────────
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── ACADEMIC YEARS ────────────────────────────────────────────────────────
+  /academic-years:
+    get:
+      operationId: listAcademicYears
+      tags: [academic-years]
+      summary: List academic years
+      responses:
+        "200":
+          description: List of academic years
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AcademicYear"
+    post:
+      operationId: createAcademicYear
+      tags: [academic-years]
+      summary: Create academic year
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcademicYearInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcademicYear"
+
+  /academic-years/{id}:
+    get:
+      operationId: getAcademicYear
+      tags: [academic-years]
+      summary: Get academic year
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Academic year
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcademicYear"
+    patch:
+      operationId: updateAcademicYear
+      tags: [academic-years]
+      summary: Update academic year
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcademicYearUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcademicYear"
+    delete:
+      operationId: deleteAcademicYear
+      tags: [academic-years]
+      summary: Delete academic year
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ── TERMS ────────────────────────────────────────────────────────────────
+  /terms:
+    get:
+      operationId: listTerms
+      tags: [terms]
+      summary: List terms
+      parameters:
+        - name: academicYearId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of terms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Term"
+    post:
+      operationId: createTerm
+      tags: [terms]
+      summary: Create term
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TermInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Term"
+
+  /terms/{id}:
+    get:
+      operationId: getTerm
+      tags: [terms]
+      summary: Get term
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Term
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Term"
+    patch:
+      operationId: updateTerm
+      tags: [terms]
+      summary: Update term
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TermUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Term"
+    delete:
+      operationId: deleteTerm
+      tags: [terms]
+      summary: Delete term
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ── CLASSES ──────────────────────────────────────────────────────────────
+  /classes:
+    get:
+      operationId: listClasses
+      tags: [classes]
+      summary: List classes
+      parameters:
+        - name: academicYearId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of classes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Class"
+    post:
+      operationId: createClass
+      tags: [classes]
+      summary: Create class
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClassInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Class"
+
+  /classes/{id}:
+    get:
+      operationId: getClass
+      tags: [classes]
+      summary: Get class
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Class
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Class"
+    patch:
+      operationId: updateClass
+      tags: [classes]
+      summary: Update class
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClassUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Class"
+    delete:
+      operationId: deleteClass
+      tags: [classes]
+      summary: Delete class
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /classes/{id}/subjects:
+    get:
+      operationId: listClassSubjects
+      tags: [classes]
+      summary: List subjects for a class
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Subjects for class
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClassSubject"
+    post:
+      operationId: addClassSubject
+      tags: [classes]
+      summary: Add subject to class
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClassSubjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClassSubject"
+
+  /class-subjects/{id}:
+    delete:
+      operationId: removeClassSubject
+      tags: [classes]
+      summary: Remove subject from class
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ── SUBJECTS ─────────────────────────────────────────────────────────────
+  /subjects:
+    get:
+      operationId: listSubjects
+      tags: [subjects]
+      summary: List subjects
+      responses:
+        "200":
+          description: List of subjects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subject"
+    post:
+      operationId: createSubject
+      tags: [subjects]
+      summary: Create subject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubjectInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subject"
+
+  /subjects/{id}:
+    patch:
+      operationId: updateSubject
+      tags: [subjects]
+      summary: Update subject
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubjectUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subject"
+    delete:
+      operationId: deleteSubject
+      tags: [subjects]
+      summary: Delete subject
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ── USERS ─────────────────────────────────────────────────────────────────
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List users (admin only)
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, teacher, parent]
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ── TEACHERS ─────────────────────────────────────────────────────────────
+  /teachers:
+    get:
+      operationId: listTeachers
+      tags: [teachers]
+      summary: List teachers
+      responses:
+        "200":
+          description: List of teachers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Teacher"
+
+  /teachers/{id}:
+    get:
+      operationId: getTeacher
+      tags: [teachers]
+      summary: Get teacher
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Teacher
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Teacher"
+
+  # ── TEACHER ASSIGNMENTS ───────────────────────────────────────────────────
+  /teacher-assignments:
+    get:
+      operationId: listTeacherAssignments
+      tags: [teachers]
+      summary: List teacher assignments
+      parameters:
+        - name: teacherId
+          in: query
+          schema:
+            type: integer
+        - name: termId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of teacher assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeacherAssignment"
+    post:
+      operationId: createTeacherAssignment
+      tags: [teachers]
+      summary: Assign teacher to class subject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeacherAssignmentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeacherAssignment"
+
+  /teacher-assignments/{id}:
+    delete:
+      operationId: deleteTeacherAssignment
+      tags: [teachers]
+      summary: Remove teacher assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ── STUDENTS ─────────────────────────────────────────────────────────────
+  /students:
+    get:
+      operationId: listStudents
+      tags: [students]
+      summary: List students
+      parameters:
+        - name: classId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of students
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Student"
+    post:
+      operationId: createStudent
+      tags: [students]
+      summary: Create student
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+
+  /students/{id}:
+    get:
+      operationId: getStudent
+      tags: [students]
+      summary: Get student
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Student
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+    patch:
+      operationId: updateStudent
+      tags: [students]
+      summary: Update student
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+    delete:
+      operationId: deleteStudent
+      tags: [students]
+      summary: Delete student
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ── ASSESSMENT COMPONENTS ─────────────────────────────────────────────────
+  /assessment-components:
+    get:
+      operationId: listAssessmentComponents
+      tags: [assessment-components]
+      summary: List assessment components
+      parameters:
+        - name: termId
+          in: query
+          schema:
+            type: integer
+        - name: subjectId
+          in: query
+          schema:
+            type: integer
+        - name: classSubjectId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of assessment components
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AssessmentComponent"
+    post:
+      operationId: createAssessmentComponent
+      tags: [assessment-components]
+      summary: Create assessment component
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessmentComponentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentComponent"
+
+  /assessment-components/{id}:
+    patch:
+      operationId: updateAssessmentComponent
+      tags: [assessment-components]
+      summary: Update assessment component
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessmentComponentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentComponent"
+    delete:
+      operationId: deleteAssessmentComponent
+      tags: [assessment-components]
+      summary: Delete assessment component
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ── SCORES ────────────────────────────────────────────────────────────────
+  /scores:
+    get:
+      operationId: listScores
+      tags: [scores]
+      summary: List scores
+      parameters:
+        - name: termId
+          in: query
+          schema:
+            type: integer
+        - name: classId
+          in: query
+          schema:
+            type: integer
+        - name: assessmentComponentId
+          in: query
+          schema:
+            type: integer
+        - name: studentId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of scores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Score"
+    put:
+      operationId: upsertScore
+      tags: [scores]
+      summary: Upsert score (insert or update)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoreInput"
+      responses:
+        "200":
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Score"
+
+  /scores/bulk:
+    put:
+      operationId: bulkUpsertScores
+      tags: [scores]
+      summary: Bulk upsert scores for a class/subject/term
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkScoreInput"
+      responses:
+        "200":
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Score"
+
+  # ── GRADING SCALES ────────────────────────────────────────────────────────
+  /grading-scales:
+    get:
+      operationId: listGradingScales
+      tags: [grading-scales]
+      summary: List grading scales
+      responses:
+        "200":
+          description: List of grading scale entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GradingScale"
+    post:
+      operationId: createGradingScale
+      tags: [grading-scales]
+      summary: Create grading scale entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GradingScaleInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GradingScale"
+
+  /grading-scales/{id}:
+    patch:
+      operationId: updateGradingScale
+      tags: [grading-scales]
+      summary: Update grading scale entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GradingScaleUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GradingScale"
+    delete:
+      operationId: deleteGradingScale
+      tags: [grading-scales]
+      summary: Delete grading scale entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ── REPORT CARDS ──────────────────────────────────────────────────────────
+  /report-card-status:
+    get:
+      operationId: listReportCardStatuses
+      tags: [report-cards]
+      summary: List report card statuses
+      parameters:
+        - name: termId
+          in: query
+          schema:
+            type: integer
+        - name: classId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of report card statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportCardStatus"
+
+  /report-card-status/{id}:
+    patch:
+      operationId: updateReportCardStatus
+      tags: [report-cards]
+      summary: Update report card status (approve/publish workflow)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportCardStatusUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportCardStatus"
+
+  /report-card-status/class/{classId}/term/{termId}:
+    post:
+      operationId: initReportCardStatus
+      tags: [report-cards]
+      summary: Initialize report card status for a class+term
+      parameters:
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: termId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportCardStatus"
+
+  /report-cards/{studentId}/{termId}:
+    get:
+      operationId: getStudentReportCard
+      tags: [report-cards]
+      summary: Get report card for a single student in a term
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: termId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Student report card with computed totals, grades, and ranks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentReportCard"
+
+  /report-cards/class/{classId}/term/{termId}:
+    get:
+      operationId: getClassReportCards
+      tags: [report-cards]
+      summary: Get all report cards for a class in a term
+      parameters:
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: termId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Class report cards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudentReportCard"
+
+  # ── DASHBOARD ─────────────────────────────────────────────────────────────
+  /dashboard/admin-summary:
+    get:
+      operationId: getAdminDashboardSummary
+      tags: [dashboard]
+      summary: Admin dashboard summary
+      responses:
+        "200":
+          description: Admin summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDashboardSummary"
+
+  /dashboard/teacher-summary:
+    get:
+      operationId: getTeacherDashboardSummary
+      tags: [dashboard]
+      summary: Teacher dashboard summary for the logged-in teacher
+      responses:
+        "200":
+          description: Teacher summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeacherDashboardSummary"
+
+  /dashboard/score-completion:
+    get:
+      operationId: getScoreCompletion
+      tags: [dashboard]
+      summary: Score entry completion per class per subject for a term
+      parameters:
+        - name: termId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Score completion stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScoreCompletion"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    # ── Auth ──────────────────────────────────────────────────────────────
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthUser:
+      type: object
+      required: [id, fullName, email, role]
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, teacher, parent]
+        teacherId:
+          type: ["integer", "null"]
+
+    # ── Academic Year ─────────────────────────────────────────────────────
+    AcademicYear:
+      type: object
+      required: [id, yearLabel, isCurrent]
+      properties:
+        id:
+          type: integer
+        yearLabel:
+          type: string
+        isCurrent:
+          type: boolean
+
+    AcademicYearInput:
+      type: object
+      required: [yearLabel]
+      properties:
+        yearLabel:
+          type: string
+        isCurrent:
+          type: boolean
+
+    AcademicYearUpdate:
+      type: object
+      properties:
+        yearLabel:
+          type: string
+        isCurrent:
+          type: boolean
+
+    # ── Term ──────────────────────────────────────────────────────────────
+    Term:
+      type: object
+      required: [id, academicYearId, name, isCurrent]
+      properties:
+        id:
+          type: integer
+        academicYearId:
+          type: integer
+        academicYearLabel:
+          type: string
+        name:
+          type: string
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        isCurrent:
+          type: boolean
+
+    TermInput:
+      type: object
+      required: [academicYearId, name]
+      properties:
+        academicYearId:
+          type: integer
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        isCurrent:
+          type: boolean
+
+    TermUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        isCurrent:
+          type: boolean
+
+    # ── Class ─────────────────────────────────────────────────────────────
+    Class:
+      type: object
+      required: [id, name, academicYearId]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        academicYearId:
+          type: integer
+        academicYearLabel:
+          type: string
+        classTeacherId:
+          type: ["integer", "null"]
+        classTeacherName:
+          type: ["string", "null"]
+        studentCount:
+          type: integer
+
+    ClassInput:
+      type: object
+      required: [name, academicYearId]
+      properties:
+        name:
+          type: string
+        academicYearId:
+          type: integer
+        classTeacherId:
+          type: integer
+
+    ClassUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        classTeacherId:
+          type: integer
+
+    ClassSubject:
+      type: object
+      required: [id, classId, subjectId, subjectName, subjectCode]
+      properties:
+        id:
+          type: integer
+        classId:
+          type: integer
+        subjectId:
+          type: integer
+        subjectName:
+          type: string
+        subjectCode:
+          type: string
+
+    ClassSubjectInput:
+      type: object
+      required: [subjectId]
+      properties:
+        subjectId:
+          type: integer
+
+    # ── Subject ───────────────────────────────────────────────────────────
+    Subject:
+      type: object
+      required: [id, name, code]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+
+    SubjectInput:
+      type: object
+      required: [name, code]
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+
+    SubjectUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+
+    # ── User ──────────────────────────────────────────────────────────────
+    User:
+      type: object
+      required: [id, fullName, email, role, createdAt]
+      properties:
+        id:
+          type: integer
+        fullName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, teacher, parent]
+        createdAt:
+          type: string
+
+    UserInput:
+      type: object
+      required: [fullName, email, password, role]
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, teacher, parent]
+        staffId:
+          type: string
+        phone:
+          type: string
+
+    UserUpdate:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, teacher, parent]
+
+    # ── Teacher ───────────────────────────────────────────────────────────
+    Teacher:
+      type: object
+      required: [id, userId, fullName, email]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        fullName:
+          type: string
+        email:
+          type: string
+        staffId:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+
+    TeacherAssignment:
+      type: object
+      required: [id, teacherId, classSubjectId, termId]
+      properties:
+        id:
+          type: integer
+        teacherId:
+          type: integer
+        teacherName:
+          type: string
+        classSubjectId:
+          type: integer
+        className:
+          type: string
+        subjectName:
+          type: string
+        termId:
+          type: integer
+        termName:
+          type: string
+
+    TeacherAssignmentInput:
+      type: object
+      required: [teacherId, classSubjectId, termId]
+      properties:
+        teacherId:
+          type: integer
+        classSubjectId:
+          type: integer
+        termId:
+          type: integer
+
+    # ── Student ───────────────────────────────────────────────────────────
+    Student:
+      type: object
+      required: [id, studentIdNumber, fullName, classId]
+      properties:
+        id:
+          type: integer
+        studentIdNumber:
+          type: string
+        fullName:
+          type: string
+        dateOfBirth:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        classId:
+          type: integer
+        className:
+          type: string
+        guardianName:
+          type: ["string", "null"]
+        guardianPhone:
+          type: ["string", "null"]
+        admissionDate:
+          type: ["string", "null"]
+
+    StudentInput:
+      type: object
+      required: [studentIdNumber, fullName, classId]
+      properties:
+        studentIdNumber:
+          type: string
+        fullName:
+          type: string
+        dateOfBirth:
+          type: string
+        gender:
+          type: string
+          enum: [male, female]
+        classId:
+          type: integer
+        guardianName:
+          type: string
+        guardianPhone:
+          type: string
+        admissionDate:
+          type: string
+
+    StudentUpdate:
+      type: object
+      properties:
+        fullName:
+          type: string
+        dateOfBirth:
+          type: string
+        gender:
+          type: string
+        classId:
+          type: integer
+        guardianName:
+          type: string
+        guardianPhone:
+          type: string
+
+    # ── Assessment Components ─────────────────────────────────────────────
+    AssessmentComponent:
+      type: object
+      required: [id, classSubjectId, termId, name, weightPercent, maxScore]
+      properties:
+        id:
+          type: integer
+        classSubjectId:
+          type: integer
+        subjectName:
+          type: string
+        termId:
+          type: integer
+        name:
+          type: string
+        weightPercent:
+          type: number
+        maxScore:
+          type: number
+
+    AssessmentComponentInput:
+      type: object
+      required: [classSubjectId, termId, name, weightPercent, maxScore]
+      properties:
+        classSubjectId:
+          type: integer
+        termId:
+          type: integer
+        name:
+          type: string
+        weightPercent:
+          type: number
+        maxScore:
+          type: number
+
+    AssessmentComponentUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        weightPercent:
+          type: number
+        maxScore:
+          type: number
+
+    # ── Scores ────────────────────────────────────────────────────────────
+    Score:
+      type: object
+      required: [id, studentId, assessmentComponentId, scoreValue]
+      properties:
+        id:
+          type: integer
+        studentId:
+          type: integer
+        studentName:
+          type: string
+        assessmentComponentId:
+          type: integer
+        componentName:
+          type: string
+        scoreValue:
+          type: number
+        isLocked:
+          type: boolean
+        enteredAt:
+          type: string
+        lastEditedAt:
+          type: ["string", "null"]
+
+    ScoreInput:
+      type: object
+      required: [studentId, assessmentComponentId, scoreValue]
+      properties:
+        studentId:
+          type: integer
+        assessmentComponentId:
+          type: integer
+        scoreValue:
+          type: number
+
+    BulkScoreInput:
+      type: object
+      required: [scores]
+      properties:
+        scores:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreInput"
+
+    # ── Grading Scale ─────────────────────────────────────────────────────
+    GradingScale:
+      type: object
+      required: [id, minScore, maxScore, gradeLabel, remark]
+      properties:
+        id:
+          type: integer
+        minScore:
+          type: number
+        maxScore:
+          type: number
+        gradeLabel:
+          type: string
+        remark:
+          type: string
+
+    GradingScaleInput:
+      type: object
+      required: [minScore, maxScore, gradeLabel, remark]
+      properties:
+        minScore:
+          type: number
+        maxScore:
+          type: number
+        gradeLabel:
+          type: string
+        remark:
+          type: string
+
+    GradingScaleUpdate:
+      type: object
+      properties:
+        minScore:
+          type: number
+        maxScore:
+          type: number
+        gradeLabel:
+          type: string
+        remark:
+          type: string
+
+    # ── Report Cards ──────────────────────────────────────────────────────
+    ReportCardStatus:
+      type: object
+      required: [id, classId, termId, status]
+      properties:
+        id:
+          type: integer
+        classId:
+          type: integer
+        className:
+          type: string
+        termId:
+          type: integer
+        termName:
+          type: string
+        status:
+          type: string
+          enum: [draft, submitted, approved, published]
+        approvedBy:
+          type: ["integer", "null"]
+        approvedAt:
+          type: ["string", "null"]
+
+    ReportCardStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [draft, submitted, approved, published]
+
+    SubjectResult:
+      type: object
+      required: [subjectId, subjectName, subjectCode, total, grade, remark, subjectRank, classAverage, classHighest, classLowest]
+      properties:
+        subjectId:
+          type: integer
+        subjectName:
+          type: string
+        subjectCode:
+          type: string
+        total:
+          type: number
+        grade:
+          type: string
+        remark:
+          type: string
+        subjectRank:
+          type: integer
+        classAverage:
+          type: number
+        classHighest:
+          type: number
+        classLowest:
+          type: number
+        componentScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComponentScore"
+
+    ComponentScore:
+      type: object
+      required: [componentId, componentName, scoreValue, maxScore, weightPercent, weightedScore]
+      properties:
+        componentId:
+          type: integer
+        componentName:
+          type: string
+        scoreValue:
+          type: number
+        maxScore:
+          type: number
+        weightPercent:
+          type: number
+        weightedScore:
+          type: number
+
+    StudentReportCard:
+      type: object
+      required: [studentId, studentName, studentIdNumber, className, termName, overallAverage, overallPosition, totalStudents, subjectResults]
+      properties:
+        studentId:
+          type: integer
+        studentName:
+          type: string
+        studentIdNumber:
+          type: string
+        className:
+          type: string
+        termName:
+          type: string
+        academicYear:
+          type: string
+        overallAverage:
+          type: number
+        overallPosition:
+          type: integer
+        totalStudents:
+          type: integer
+        subjectResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubjectResult"
+        reportCardStatus:
+          type: string
+          enum: [draft, submitted, approved, published]
+
+    # ── Dashboard ─────────────────────────────────────────────────────────
+    AdminDashboardSummary:
+      type: object
+      required: [totalStudents, totalTeachers, totalClasses, totalSubjects, currentTerm, reportCardStatusCounts]
+      properties:
+        totalStudents:
+          type: integer
+        totalTeachers:
+          type: integer
+        totalClasses:
+          type: integer
+        totalSubjects:
+          type: integer
+        currentTerm:
+          type: ["string", "null"]
+        currentAcademicYear:
+          type: ["string", "null"]
+        reportCardStatusCounts:
+          type: object
+          properties:
+            draft:
+              type: integer
+            submitted:
+              type: integer
+            approved:
+              type: integer
+            published:
+              type: integer
+          required: [draft, submitted, approved, published]
+
+    TeacherDashboardSummary:
+      type: object
+      required: [teacherName, assignedClasses, totalStudentsInCharge, pendingScoreEntries]
+      properties:
+        teacherName:
+          type: string
+        assignedClasses:
+          type: array
+          items:
+            type: object
+            required: [classId, className, subjectName, studentCount, scoresEntered, totalScoresExpected]
+            properties:
+              classId:
+                type: integer
+              className:
+                type: string
+              subjectName:
+                type: string
+              studentCount:
+                type: integer
+              scoresEntered:
+                type: integer
+              totalScoresExpected:
+                type: integer
+        totalStudentsInCharge:
+          type: integer
+        pendingScoreEntries:
+          type: integer
+        ledClasses:
+          type: array
+          items:
+            type: object
+            required: [classId, className]
+            properties:
+              classId:
+                type: integer
+              className:
+                type: string
+
+    ScoreCompletion:
+      type: object
+      required: [classId, className, subjectId, subjectName, totalExpected, totalEntered, percentComplete]
+      properties:
+        classId:
+          type: integer
+        className:
+          type: string
+        subjectId:
+          type: integer
+        subjectName:
+          type: string
+        totalExpected:
+          type: integer
+        totalEntered:
+          type: integer
+        percentComplete:
+          type: number

@@ -1,0 +1,93 @@
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# compiled output
+dist
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
+
+# dependencies
+node_modules
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
+.DS_Store
+Thumbs.db
+
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
+
+# Replit
+.cache/
+.local/
+.replit
+.replit-artifact
+**/.replit-artifact/
+
+# AI / Coding Assistant metadata (Cursor, Claude, Copilot, Gemini, Windsurf, etc.)
+.cursor/
+.claude/
+CLAUDE.md
+claude.md
+.copilot/
+.gemini/
+.aider*
+.windsurf/
+*.ai-checkpoint
+
+# Local Database & Workspace Temp Files
+db-data/
+*.log
+pg_log.txt
+reset_pw.cjs
+*.tsbuildinfo
+drizzle/
+
+# Database backups (can be large and contain real data)
+backups/
+
+# Internal prompt/agent text files (not part of source code)
+attached_assets/*.txt
+
+# SSL Certificates (generated locally — never commit private keys)
+certs/
+
+# Environment variables — contains database credentials and secrets
+.env
+.env.local
+.env.*.local
+
+# .neon/project.json is intentionally NOT ignored — it contains no secrets
+# and links this repo to the Neon cloud project for team members.
+
+# Git Auto-commit service files
+/scripts/git-autocommit.pid
+
+
