@@ -1,3 +1,5 @@
+import { cacheGet, cacheSet, queueAdd } from "./offline-store";
+
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
@@ -360,12 +362,71 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  // Caching/Queuing logic for Offline-first capabilities
+  if (method === "GET" || method === "HEAD") {
+    try {
+      const response = await fetch(input, { ...init, method, headers });
+      if (!response.ok) {
+        const errorData = await parseErrorBody(response, method);
+        throw new ApiError(response, errorData, requestInfo);
+      }
+      const parsed = await parseSuccessBody(response, responseType, requestInfo);
+      // Cache the response asynchronously (ignoring failures)
+      cacheSet(requestInfo.url, parsed).catch(err => console.error("Cache set failed:", err));
+      return parsed as T;
+    } catch (networkError) {
+      console.warn(`Fetch failed for GET ${requestInfo.url}, checking local IndexedDB cache...`, networkError);
+      const cached = await cacheGet(requestInfo.url).catch(() => null);
+      if (cached !== null) {
+        console.log(`Serving cached response for GET ${requestInfo.url}`);
+        return cached as T;
+      }
+      throw networkError;
+    }
+  } else {
+    // For mutations (POST, PUT, PATCH, DELETE)
+    try {
+      const response = await fetch(input, { ...init, method, headers });
+      if (!response.ok) {
+        const errorData = await parseErrorBody(response, method);
+        throw new ApiError(response, errorData, requestInfo);
+      }
+      return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+    } catch (networkError) {
+      const isAuthRequest = requestInfo.url.includes("/auth/login") || requestInfo.url.includes("/auth/logout");
+      if (!isAuthRequest) {
+        console.warn(`Mutation failed for ${requestInfo.url}, adding to offline sync queue...`, networkError);
+        
+        // Convert headers to a standard Record<string, string>
+        const headersRecord: Record<string, string> = {};
+        headers.forEach((value, key) => {
+          headersRecord[key] = value;
+        });
 
-  if (!response.ok) {
-    const errorData = await parseErrorBody(response, method);
-    throw new ApiError(response, errorData, requestInfo);
+        // Add to IndexedDB sync queue
+        await queueAdd(requestInfo.url, method, init.body, headersRecord).catch(err => {
+          console.error("Failed to add mutation to sync queue:", err);
+        });
+
+        // Return a mock successful response
+        let mockResponse: any = {};
+        if (typeof init.body === "string" && looksLikeJson(init.body)) {
+          try {
+            mockResponse = JSON.parse(init.body);
+          } catch {
+            // ignore
+          }
+        }
+        
+        mockResponse.id = mockResponse.id || Math.floor(Math.random() * -1000000); // negative temp ID
+        mockResponse.isOfflinePlaceholder = true;
+
+        // Dispatch events to notify UI components
+        window.dispatchEvent(new CustomEvent("offline-sync-item-queued", { detail: { url: requestInfo.url } }));
+
+        return mockResponse as T;
+      }
+      throw networkError;
+    }
   }
-
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
 }

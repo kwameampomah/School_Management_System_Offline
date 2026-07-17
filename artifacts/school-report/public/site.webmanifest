@@ -1,0 +1,17 @@
+{
+  "name": "Taifa School Report Manager",
+  "short_name": "School Report",
+  "description": "Offline-first school management and terminal report card manager.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useTheme } from "@/contexts/theme";
+import SyncStatusIndicator from "./sync-status-indicator";
 
 const navItems = {
   admin: [
@@ -96,8 +97,9 @@ function SidebarContent({
         })}
       </nav>
 
-      <div className="p-4 border-t border-sidebar-border shrink-0">
-        <div className="px-3 py-2 mb-2 min-w-0">
+      <div className="p-4 border-t border-sidebar-border shrink-0 space-y-3">
+        <SyncStatusIndicator />
+        <div className="px-3 py-2 min-w-0">
           <div className="text-sm font-medium truncate max-w-[160px]">{user.fullName}</div>
           <div className="text-xs text-sidebar-foreground/60 truncate max-w-[160px]">{user.email}</div>
         </div>
@@ -246,9 +248,10 @@ export function AppLayout({
       {/* Main Content */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Header */}
-        <header className="h-12 sm:h-14 border-b bg-card flex items-center px-3 sm:px-4 md:hidden shrink-0">  
-          <div className="font-bold text-primary text-sm sm:text-base truncate">Taifa Ebenezer School</div>
-          <div className="ml-auto flex items-center gap-1 shrink-0">
+        <header className="h-14 border-b bg-card flex items-center px-3 sm:px-4 md:hidden shrink-0 justify-between">  
+          <div className="font-bold text-primary text-xs sm:text-sm truncate mr-2">Taifa Ebenezer</div>
+          <SyncStatusIndicator />
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={toggleTheme}
               aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
