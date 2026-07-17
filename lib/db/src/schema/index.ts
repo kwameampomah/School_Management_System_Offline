@@ -12,5 +12,6 @@ export * from "./grading-scale";
 export * from "./report-card-status";
 export * from "./audit-logs";
 export * from "./student-term-metadata";
+export * from "./attendance";
 
 

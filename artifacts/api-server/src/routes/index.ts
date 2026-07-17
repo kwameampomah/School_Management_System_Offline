@@ -16,6 +16,7 @@ import dashboardRouter from "./dashboard";
 import studentTermMetadataRouter from "./student-term-metadata";
 import promotionsRouter from "./promotions";
 import notificationsRouter from "./notifications";
+import attendanceRouter from "./attendance";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(dashboardRouter);
 router.use(studentTermMetadataRouter);
 router.use(promotionsRouter);
 router.use(notificationsRouter);
+router.use(attendanceRouter);
 
 export default router;
