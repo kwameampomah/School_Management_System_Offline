@@ -1,11 +1,22 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql, inArray } from "drizzle-orm";
-import { db, feeTypesTable, studentFeesTable, feePaymentsTable, studentsTable, classesTable, usersTable } from "@workspace/db";
+import { db, feeTypesTable, studentFeesTable, feePaymentsTable, studentsTable, classesTable, usersTable, type FeePayment } from "@workspace/db";
 import { requireAuth, requireAdmin } from "../middlewares/auth";
 import { validate } from "../middlewares/validation";
+import { logAudit } from "../lib/audit";
+import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 
 const router: IRouter = Router();
+
+// Rate limit payments endpoint: max 100 payments per minute per user/IP
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: { error: "Too many payments recorded. Please wait a minute." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Zod schemas for input validation
 const CreateFeeTypeSchema = z.object({
@@ -25,7 +36,13 @@ const AssignBulkFeesSchema = z.object({
 const RecordPaymentSchema = z.object({
   studentFeeId: z.number().int().positive(),
   amountPaid: z.number().positive("Amount paid must be positive"),
-  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Payment date must be YYYY-MM-DD"),
+  paymentDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Payment date must be YYYY-MM-DD")
+    .refine(
+      (d) => new Date(d) <= new Date(),
+      "Payment date cannot be in the future"
+    ),
   paymentMethod: z.enum(["cash", "bank_transfer", "momo"]),
   reference: z.string().max(100).optional().nullable(),
   notes: z.string().max(500).optional().nullable()
@@ -36,7 +53,7 @@ router.get("/fees/types", requireAdmin, async (req, res): Promise<void> => {
   try {
     const rows = await db.select().from(feeTypesTable).orderBy(feeTypesTable.name);
     res.json(rows);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to fetch fee types:", error);
     res.status(500).json({ error: "Failed to fetch fee types" });
   }
@@ -45,6 +62,8 @@ router.get("/fees/types", requireAdmin, async (req, res): Promise<void> => {
 // 2. POST create a new fee category (Admin only)
 router.post("/fees/types", requireAdmin, validate(CreateFeeTypeSchema), async (req, res): Promise<void> => {
   const { name, amount, description } = req.body;
+  const adminId = req.session.userId ?? null;
+
   try {
     const [row] = await db
       .insert(feeTypesTable)
@@ -54,8 +73,19 @@ router.post("/fees/types", requireAdmin, validate(CreateFeeTypeSchema), async (r
         description: description ?? null
       })
       .returning();
+
+    // Audit log
+    await logAudit(
+      adminId,
+      "INSERT",
+      "fee_types",
+      row.id,
+      null,
+      JSON.stringify(row)
+    );
+
     res.status(201).json(row);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to create fee type:", error);
     res.status(500).json({ error: "Failed to create fee type" });
   }
@@ -64,8 +94,20 @@ router.post("/fees/types", requireAdmin, validate(CreateFeeTypeSchema), async (r
 // 3. POST bulk assign fee type to students in a class (Admin only)
 router.post("/fees/assign-bulk", requireAdmin, validate(AssignBulkFeesSchema), async (req, res): Promise<void> => {
   const { classId, termId, feeTypeId, amount, dueDate } = req.body;
+  const adminId = req.session.userId ?? null;
 
   try {
+    // Check if class exists
+    const [classRecord] = await db
+      .select()
+      .from(classesTable)
+      .where(eq(classesTable.id, classId));
+
+    if (!classRecord) {
+      res.status(404).json({ error: "Class not found" });
+      return;
+    }
+
     // 1. Fetch all students in the class
     const classStudents = await db
       .select({ id: studentsTable.id })
@@ -97,31 +139,44 @@ router.post("/fees/assign-bulk", requireAdmin, validate(AssignBulkFeesSchema), a
     }
 
     // 3. Insert bills
+    const assignedIds: number[] = [];
     await db.transaction(async (tx) => {
       for (const student of studentsToBill) {
-        await tx.insert(studentFeesTable).values({
+        const [inserted] = await tx.insert(studentFeesTable).values({
           studentId: student.id,
           termId,
           feeTypeId,
           amountDue: String(amount),
           amountPaid: "0.00",
+          isPaid: false,
           dueDate: dueDate ?? null
-        });
+        }).returning();
+        assignedIds.push(inserted.id);
       }
     });
+
+    // Audit log bulk assignment
+    await logAudit(
+      adminId,
+      "INSERT",
+      "student_fees",
+      classId, // group by class ID for the log
+      null,
+      `Bulk assigned feeTypeId ${feeTypeId} of GH₵ ${amount} to ${studentsToBill.length} students in class ${classRecord.name}. Assigned IDs: ${assignedIds.join(",")}`
+    );
 
     res.status(201).json({
       success: true,
       message: `Successfully assigned fee to ${studentsToBill.length} students.`
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Bulk fee assignment failed:", error);
     res.status(500).json({ error: "Failed to assign fees to class" });
   }
 });
 
-// 4. POST record a fee payment (Admin only)
-router.post("/fees/payments", requireAdmin, validate(RecordPaymentSchema), async (req, res): Promise<void> => {
+// 4. POST record a fee payment (Admin only with rate limiting)
+router.post("/fees/payments", requireAdmin, paymentLimiter, validate(RecordPaymentSchema), async (req, res): Promise<void> => {
   const { studentFeeId, amountPaid, paymentDate, paymentMethod, reference, notes } = req.body;
   const adminId = req.session.userId ?? null;
 
@@ -137,16 +192,47 @@ router.post("/fees/payments", requireAdmin, validate(RecordPaymentSchema), async
         throw new Error("INVOICE_NOT_FOUND");
       }
 
-      const due = parseFloat(invoice.amountDue);
-      const paid = parseFloat(invoice.amountPaid);
-      const outstanding = due - paid;
+      // Idempotency check: prevent duplicate payments within the same transaction to handle double-clicks/retries
+      const existingPayment = await tx
+        .select()
+        .from(feePaymentsTable)
+        .where(
+          and(
+            eq(feePaymentsTable.studentFeeId, studentFeeId),
+            eq(feePaymentsTable.paymentDate, paymentDate),
+            eq(feePaymentsTable.amountPaid, String(amountPaid)),
+            eq(feePaymentsTable.paymentMethod, paymentMethod),
+            reference ? eq(feePaymentsTable.reference, reference) : sql`reference IS NULL`
+          )
+        );
+
+      if (existingPayment.length > 0) {
+        return existingPayment[0]; // Return the existing record instead of inserting again
+      }
+
+      // Check for backdated payment date before invoice creation date
+      const invoiceCreated = new Date(invoice.createdAt);
+      invoiceCreated.setHours(0, 0, 0, 0);
+      const paidDate = new Date(paymentDate);
+      paidDate.setHours(0, 0, 0, 0);
+
+      if (paidDate < invoiceCreated) {
+        throw new Error("BACKDATED_PAYMENT");
+      }
+
+      // Cents-based safe integer arithmetic to prevent floating-point calculation issues
+      const dueCents = Math.round(parseFloat(invoice.amountDue) * 100);
+      const paidCents = Math.round(parseFloat(invoice.amountPaid) * 100);
+      const addCents = Math.round(amountPaid * 100);
+      const outstandingCents = dueCents - paidCents;
 
       // Allow up to remaining outstanding balance
-      if (amountPaid > outstanding + 0.01) {
+      if (addCents > outstandingCents) {
         throw new Error("OVERPAYMENT");
       }
 
-      const newPaidTotal = (paid + amountPaid).toFixed(2);
+      const newPaidTotal = ((paidCents + addCents) / 100).toFixed(2);
+      const isPaid = (paidCents + addCents) >= dueCents;
 
       // Insert transaction event
       const [payment] = await tx
@@ -162,25 +248,47 @@ router.post("/fees/payments", requireAdmin, validate(RecordPaymentSchema), async
         })
         .returning();
 
-      // Update total paid in invoice
+      // Update total paid in invoice and update isPaid
       await tx
         .update(studentFeesTable)
-        .set({ amountPaid: newPaidTotal })
+        .set({
+          amountPaid: newPaidTotal,
+          isPaid,
+          updatedAt: new Date().toISOString()
+        })
         .where(eq(studentFeesTable.id, studentFeeId));
+
+      // Audit log
+      await logAudit(
+        adminId,
+        "INSERT",
+        "fee_payments",
+        payment.id,
+        null,
+        JSON.stringify(payment)
+      );
 
       return payment;
     });
 
     res.status(201).json(result);
-  } catch (error: any) {
-    if (error.message === "INVOICE_NOT_FOUND") {
-      res.status(404).json({ error: "Student fee record not found" });
-    } else if (error.message === "OVERPAYMENT") {
-      res.status(400).json({ error: "Payment amount exceeds the outstanding balance." });
-    } else {
-      console.error("Record payment transaction failed:", error);
-      res.status(500).json({ error: "Failed to record payment" });
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message === "INVOICE_NOT_FOUND") {
+        res.status(404).json({ error: "Student fee record not found" });
+        return;
+      }
+      if (error.message === "OVERPAYMENT") {
+        res.status(400).json({ error: "Payment amount exceeds the outstanding balance." });
+        return;
+      }
+      if (error.message === "BACKDATED_PAYMENT") {
+        res.status(400).json({ error: "Payment date cannot be prior to the billing invoice date." });
+        return;
+      }
     }
+    console.error("Record payment transaction failed:", error);
+    res.status(500).json({ error: "Failed to record payment" });
   }
 });
 
@@ -234,6 +342,7 @@ router.get("/fees/student/:studentId/:termId", requireAuth, async (req, res): Pr
         feeName: feeTypesTable.name,
         amountDue: studentFeesTable.amountDue,
         amountPaid: studentFeesTable.amountPaid,
+        isPaid: studentFeesTable.isPaid,
         dueDate: studentFeesTable.dueDate
       })
       .from(studentFeesTable)
@@ -247,18 +356,10 @@ router.get("/fees/student/:studentId/:termId", requireAuth, async (req, res): Pr
 
     const invoiceIds = invoices.map(i => i.id);
 
-    let payments: any[] = [];
+    let payments: FeePayment[] = [];
     if (invoiceIds.length > 0) {
       payments = await db
-        .select({
-          id: feePaymentsTable.id,
-          studentFeeId: feePaymentsTable.studentFeeId,
-          amountPaid: feePaymentsTable.amountPaid,
-          paymentDate: feePaymentsTable.paymentDate,
-          paymentMethod: feePaymentsTable.paymentMethod,
-          reference: feePaymentsTable.reference,
-          notes: feePaymentsTable.notes
-        })
+        .select()
         .from(feePaymentsTable)
         .where(inArray(feePaymentsTable.studentFeeId, invoiceIds))
         .orderBy(feePaymentsTable.paymentDate);
@@ -275,7 +376,7 @@ router.get("/fees/student/:studentId/:termId", requireAuth, async (req, res): Pr
         amountPaid: parseFloat(p.amountPaid)
       }))
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to fetch student billing details:", error);
     res.status(500).json({ error: "Failed to fetch student billing details" });
   }

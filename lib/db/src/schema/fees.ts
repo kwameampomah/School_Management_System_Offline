@@ -29,8 +29,12 @@ export const studentFeesTable = sqliteTable("student_fees", {
     .references(() => feeTypesTable.id, { onDelete: "restrict" }),
   amountDue: text("amount_due").notNull(),
   amountPaid: text("amount_paid").notNull().default("0.00"),
+  isPaid: integer("is_paid", { mode: "boolean" }).notNull().default(false),
   dueDate: text("due_date"),
   createdAt: text("created_at")
+    .$defaultFn(() => new Date().toISOString())
+    .notNull(),
+  updatedAt: text("updated_at")
     .$defaultFn(() => new Date().toISOString())
     .notNull(),
 }, (table) => [
