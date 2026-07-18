@@ -69,6 +69,8 @@ pg_log.txt
 reset_pw.cjs
 *.tsbuildinfo
 drizzle/
+*.db
+*.db-journal
 
 # Database backups (can be large and contain real data)
 backups/
