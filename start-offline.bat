@@ -17,25 +17,27 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8085 ^| findstr LISTENING') 
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') do (
     taskkill /f /pid %%a >nul 2>&1
 )
-timeout /t 1 > nul
+ping -n 2 127.0.0.1 >nul
 echo Done.
 echo.
 
 :: Check Node.js and pnpm installation
 echo [2/4] Verifying Node.js and pnpm...
 where node >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Node.js is not installed on this machine! Please install Node.js (v20+).
-    pause
-    exit /b
-)
+if %errorlevel% equ 0 goto NODE_OK
+echo [ERROR] Node.js is not installed on this machine! Please install Node.js v20 or higher.
+pause
+exit /b
+
+:NODE_OK
 where pnpm >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] pnpm package manager is not installed!
-    echo Please install it by running: npm install -g pnpm
-    pause
-    exit /b
-)
+if %errorlevel% equ 0 goto PNPM_OK
+echo [ERROR] pnpm package manager is not installed!
+echo Please install it by running: npm install -g pnpm
+pause
+exit /b
+
+:PNPM_OK
 echo Verified successfully.
 echo.
 
@@ -62,24 +64,30 @@ start /min "Offline API Server" cmd /c "title API Server (SQLite) && cd /d %~dp0
 :: Wait for API to be ready by polling the health endpoint (up to 60 seconds)
 echo Waiting for API server to be ready...
 set API_READY=0
-for /l %%i in (1,1,60) do (
-    if !API_READY!==0 (
-        powershell -NonInteractive -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8085/api/health' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if($r.StatusCode -eq 200){ exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
-        if !errorlevel!==0 (
-            set API_READY=1
-            echo API server is ready.
-        ) else (
-            timeout /t 1 >nul
-        )
-    )
-)
-if !API_READY!==0 (
-    echo [WARNING] API server did not respond within 60 seconds. Starting frontend anyway...
+set count=0
+
+:POLL_LOOP
+if !API_READY!==1 goto START_FRONTEND
+if !count! GEQ 60 goto START_FRONTEND_TIMEOUT
+
+set /a count+=1
+powershell -NonInteractive -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8085/api/health' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if($r.StatusCode -eq 200){ exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+if !errorlevel!==0 (
+    set API_READY=1
+    echo API server is ready.
+    goto START_FRONTEND
 )
 
+ping -n 2 127.0.0.1 >nul
+goto POLL_LOOP
+
+:START_FRONTEND_TIMEOUT
+echo [WARNING] API server did not respond within 60 seconds. Starting frontend anyway...
+
+:START_FRONTEND
 :: Start the Frontend Server (port 3000)
-start /min "Offline Frontend Server" cmd /c "title Frontend Server && cd /d %~dp0 && set "PORT=3000" && set "BASE_PATH=/" && pnpm --filter @workspace/school-report run dev"
-timeout /t 5 >nul
+start /min "Offline Frontend Server" cmd /c "title Frontend Server && cd /d %~dp0 && set PORT=3000&& set BASE_PATH=/&& pnpm --filter @workspace/school-report run dev"
+ping -n 6 127.0.0.1 >nul
 
 :: Launch browser to login page
 echo.
@@ -111,4 +119,4 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') 
     taskkill /f /pid %%a >nul 2>&1
 )
 echo All servers shut down successfully.
-timeout /t 2 >nul
+ping -n 3 127.0.0.1 >nul

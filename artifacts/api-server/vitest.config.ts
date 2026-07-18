@@ -6,7 +6,7 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.spec.ts"],
     env: {
-      DATABASE_URL: "postgres://postgres:postgres@localhost:5432/school_test",
+      DATABASE_URL: "file:./school_test.db",
       SESSION_SECRET: "test-secret-value-for-sessions-here",
     },
   },
