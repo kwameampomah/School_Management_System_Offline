@@ -21,7 +21,7 @@ export const attendanceTable = sqliteTable("attendance", {
   status: text("status").$type<"present" | "absent" | "late" | "excused">().notNull(),
   recordedBy: integer("recorded_by").references(() => usersTable.id, { onDelete: "set null" }),
   notes: text("notes"),
-  createdAt: text("created_at").default(new Date().toISOString()).notNull(),
+  createdAt: text("created_at").$defaultFn(() => new Date().toISOString()).notNull(),
 }, (table) => [
   uniqueIndex("attendance_student_class_date_idx").on(table.studentId, table.classId, table.attendanceDate),
   index("attendance_student_term_idx").on(table.studentId, table.termId),

@@ -34,8 +34,27 @@ app.use(
   }),
 );
 
+// Offline system: allow only local network origins (no internet exposure)
+const allowedOrigins: (string | RegExp)[] = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:3000$/,  // LAN access within school network
+  /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}:3000$/,
+];
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    // Allow server-to-server requests (no Origin header)
+    if (!origin) return callback(null, true);
+    const isAllowed = allowedOrigins.some((allowed) =>
+      typeof allowed === "string" ? allowed === origin : allowed.test(origin)
+    );
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS policy: origin '${origin}' is not allowed.`));
+    }
+  },
   credentials: true,
 }));
 
@@ -80,12 +99,17 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // Standardized JSON error handler
-app.use((err: any, req: any, res: any, next: any): void => {
-  req.log?.error(err);
-  const status = err.status || err.statusCode || 500;
-  res.status(status).json({
-    error: err.message || "An unexpected error occurred",
-  });
+app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction): void => {
+  // Type guard — only access known properties of Error objects
+  if (err instanceof Error) {
+    const status = (err as any).status || (err as any).statusCode || 500;
+    req.log?.error({ err }, err.message);
+    res.status(status).json({ error: err.message || "An unexpected error occurred" });
+  } else {
+    req.log?.error({ err }, "Unknown error thrown");
+    res.status(500).json({ error: "An unexpected error occurred" });
+  }
 });
 
 export default app;
+

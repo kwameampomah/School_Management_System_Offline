@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 title School Management System - Standalone Offline Launcher
 color 0E
 cls
@@ -57,11 +58,28 @@ echo [4/4] Starting Local Servers...
 
 :: Start the API Server (port 8085)
 start /min "Offline API Server" cmd /c "title API Server (SQLite) && cd /d %~dp0 && pnpm --filter @workspace/api-server run dev"
-timeout /t 2 > nul
+
+:: Wait for API to be ready by polling the health endpoint (up to 60 seconds)
+echo Waiting for API server to be ready...
+set API_READY=0
+for /l %%i in (1,1,60) do (
+    if !API_READY!==0 (
+        powershell -NonInteractive -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8085/api/health' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if($r.StatusCode -eq 200){ exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+        if !errorlevel!==0 (
+            set API_READY=1
+            echo API server is ready.
+        ) else (
+            timeout /t 1 >nul
+        )
+    )
+)
+if !API_READY!==0 (
+    echo [WARNING] API server did not respond within 60 seconds. Starting frontend anyway...
+)
 
 :: Start the Frontend Server (port 3000)
 start /min "Offline Frontend Server" cmd /c "title Frontend Server && cd /d %~dp0 && set "PORT=3000" && set "BASE_PATH=/" && pnpm --filter @workspace/school-report run dev"
-timeout /t 5 > nul
+timeout /t 5 >nul
 
 :: Launch browser to login page
 echo.
