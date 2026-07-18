@@ -5,25 +5,28 @@ import { ThemeProvider } from '@/contexts/theme';
 import NotFound from '@/pages/not-found';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 
-import LoginPage from '@/pages/login';
-import AdminDashboard from '@/pages/admin/dashboard';
-import AcademicYearsPage from '@/pages/admin/academic-years';
-import TermsPage from '@/pages/admin/terms';
-import ClassesPage from '@/pages/admin/classes';
-import SubjectsPage from '@/pages/admin/subjects';
-import ClassSubjectsPage from '@/pages/admin/class-subjects';
-import UsersPage from '@/pages/admin/users';
-import TeacherAssignmentsPage from '@/pages/admin/teacher-assignments';
-import StudentsPage from '@/pages/admin/students';
-import AssessmentComponentsPage from '@/pages/admin/assessment-components';
-import GradingScalesPage from '@/pages/admin/grading-scales';
-import ReportCardsPage from '@/pages/admin/report-cards';
-import ClassReportCardsPage from '@/pages/admin/class-report-cards';
-import PromotionsPage from '@/pages/admin/promotions';
-import TeacherDashboard from '@/pages/teacher/dashboard';
-import ScoreEntryPage from '@/pages/teacher/score-entry';
-import ParentDashboard from '@/pages/parent/dashboard';
-import SingleReportCardPage from '@/pages/parent/report-card';
+import React, { Suspense } from 'react';
+import { Loader2 } from 'lucide-react';
+
+const LoginPage = React.lazy(() => import('@/pages/login'));
+const AdminDashboard = React.lazy(() => import('@/pages/admin/dashboard'));
+const AcademicYearsPage = React.lazy(() => import('@/pages/admin/academic-years'));
+const TermsPage = React.lazy(() => import('@/pages/admin/terms'));
+const ClassesPage = React.lazy(() => import('@/pages/admin/classes'));
+const SubjectsPage = React.lazy(() => import('@/pages/admin/subjects'));
+const ClassSubjectsPage = React.lazy(() => import('@/pages/admin/class-subjects'));
+const UsersPage = React.lazy(() => import('@/pages/admin/users'));
+const TeacherAssignmentsPage = React.lazy(() => import('@/pages/admin/teacher-assignments'));
+const StudentsPage = React.lazy(() => import('@/pages/admin/students'));
+const AssessmentComponentsPage = React.lazy(() => import('@/pages/admin/assessment-components'));
+const GradingScalesPage = React.lazy(() => import('@/pages/admin/grading-scales'));
+const ReportCardsPage = React.lazy(() => import('@/pages/admin/report-cards'));
+const ClassReportCardsPage = React.lazy(() => import('@/pages/admin/class-report-cards'));
+const PromotionsPage = React.lazy(() => import('@/pages/admin/promotions'));
+const TeacherDashboard = React.lazy(() => import('@/pages/teacher/dashboard'));
+const ScoreEntryPage = React.lazy(() => import('@/pages/teacher/score-entry'));
+const ParentDashboard = React.lazy(() => import('@/pages/parent/dashboard'));
+const SingleReportCardPage = React.lazy(() => import('@/pages/parent/report-card'));
 import { AppLayout } from '@/components/layout';
 
 const queryClient = new QueryClient();
@@ -114,7 +117,13 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-            <Router />
+            <Suspense fallback={
+              <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              </div>
+            }>
+              <Router />
+            </Suspense>
           </WouterRouter>
           <Toaster />
         </TooltipProvider>
