@@ -19,6 +19,8 @@ import {
   studentTermMetadataTable,
   usersTable,
   studentFeesTable,
+  teachersTable,
+  feeTypesTable,
 } from "@workspace/db";
 import { requireAuth, requireAdmin, requireTeacher } from "../middlewares/auth";
 import { validate } from "../middlewares/validation";
@@ -77,7 +79,14 @@ async function computeSubjectTotal(
 }
 
 // Helper: lookup grade from grading scale
-async function lookupGrade(total: number): Promise<{ grade: string; remark: string }> {
+async function lookupGrade(total: number, isPrimary: boolean = false): Promise<{ grade: string; remark: string }> {
+  if (isPrimary) {
+    if (total >= 80) return { grade: "A", remark: "ADVANCE" };
+    if (total >= 68) return { grade: "P", remark: "PROFICIENCY" };
+    if (total >= 54) return { grade: "AP", remark: "APPROACHING PROFICIENCY" };
+    if (total >= 40) return { grade: "D", remark: "DEVELOPING" };
+    return { grade: "B", remark: "BEGINNING" };
+  }
   const scales = await db.select().from(gradingScaleTable);
   for (const scale of scales) {
     const min = parseFloat(scale.minScore as unknown as string);
@@ -487,9 +496,12 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
       classId: studentsTable.classId,
       className: classesTable.name,
       guardianName: studentsTable.guardianName,
+      classTeacherName: usersTable.fullName,
     })
     .from(studentsTable)
     .leftJoin(classesTable, eq(studentsTable.classId, classesTable.id))
+    .leftJoin(teachersTable, eq(classesTable.classTeacherId, teachersTable.id))
+    .leftJoin(usersTable, eq(teachersTable.userId, usersTable.id))
     .where(eq(studentsTable.id, studentId));
 
   if (!student) {
@@ -577,13 +589,14 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
     .map(([id]) => parseInt(id, 10));
   const overallPosition = sortedStudents.indexOf(studentId) + 1;
   const overallAverage = Math.round((studentTotals[studentId] ?? 0) * 100) / 100;
+  const isPrimary = !(student.className || "").toLowerCase().includes("jhs");
 
   const subjectResults = [];
   let totalScore = 0;
   for (const subj of classSubjects) {
     const { total, componentScores } = await computeSubjectTotal(studentId, subj.id, termId);
     totalScore += total;
-    const { grade, remark } = await lookupGrade(total);
+    const { grade, remark } = await lookupGrade(total, isPrimary);
 
     const subjectTotalsList: number[] = [];
     for (const cs of classStudents) {
@@ -624,25 +637,75 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
     );
 
   // Fetch school fees billed and paid for this student in this term
-  const studentFees = await db
-    .select()
+  // Fetch all school fees billed and paid for this student across all terms to populate terminal bills
+  const allStudentFees = await db
+    .select({
+      amountDue: studentFeesTable.amountDue,
+      amountPaid: studentFeesTable.amountPaid,
+      feeName: feeTypesTable.name,
+      termId: studentFeesTable.termId,
+    })
     .from(studentFeesTable)
-    .where(
-      and(
-        eq(studentFeesTable.studentId, studentId),
-        eq(studentFeesTable.termId, termId)
-      )
-    );
+    .innerJoin(feeTypesTable, eq(studentFeesTable.feeTypeId, feeTypesTable.id))
+    .where(eq(studentFeesTable.studentId, studentId));
 
-  let totalFeesDue = 0;
-  let totalFeesPaid = 0;
-  for (const fee of studentFees) {
-    totalFeesDue += parseFloat(fee.amountDue);
-    totalFeesPaid += parseFloat(fee.amountPaid);
+  let schoolFeesCurrent = 0;
+  let schoolFeesArrears = 0;
+  let classesFeesArrears = 0;
+  let uniformsArrears = 0;
+  let feedingFeesArrears = 0;
+  let booksArrears = 0;
+  let printingArrears = 0;
+
+  for (const fee of allStudentFees) {
+    const due = parseFloat(fee.amountDue);
+    const paid = parseFloat(fee.amountPaid);
+    const outstanding = due - paid;
+
+    if (outstanding <= 0.01) continue;
+
+    const name = fee.feeName.toLowerCase();
+    
+    if (fee.termId === termId) {
+      // Current Term Bills
+      if (name.includes("school fees") || name.includes("tuition")) {
+        schoolFeesCurrent += outstanding;
+      } else if (name.includes("class")) {
+        classesFeesArrears += outstanding;
+      } else if (name.includes("uniform")) {
+        uniformsArrears += outstanding;
+      } else if (name.includes("feeding") || name.includes("canteen")) {
+        feedingFeesArrears += outstanding;
+      } else if (name.includes("book")) {
+        booksArrears += outstanding;
+      } else if (name.includes("printing") || name.includes("exam")) {
+        printingArrears += outstanding;
+      } else {
+        schoolFeesCurrent += outstanding;
+      }
+    } else {
+      // Previous Terms Arrears
+      if (name.includes("school fees") || name.includes("tuition")) {
+        schoolFeesArrears += outstanding;
+      } else if (name.includes("class")) {
+        classesFeesArrears += outstanding;
+      } else if (name.includes("uniform")) {
+        uniformsArrears += outstanding;
+      } else if (name.includes("feeding") || name.includes("canteen")) {
+        feedingFeesArrears += outstanding;
+      } else if (name.includes("book")) {
+        booksArrears += outstanding;
+      } else if (name.includes("printing") || name.includes("exam")) {
+        printingArrears += outstanding;
+      } else {
+        schoolFeesArrears += outstanding;
+      }
+    }
   }
-  const outstandingBalance = totalFeesDue - totalFeesPaid;
 
-  // Initialize PDF document
+  const totalOutstandingBill = schoolFeesCurrent + schoolFeesArrears + classesFeesArrears + uniformsArrears + feedingFeesArrears + booksArrears + printingArrears;
+
+  // Initialize PDF document - A4 size is 595.28 x 841.89
   const doc = new PDFDocument({ size: "A4", margin: 40 });
 
   res.setHeader("Content-Type", "application/pdf");
@@ -654,7 +717,7 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
   doc.pipe(res);
 
   // Outer border
-  doc.rect(20, 20, 555.28, 801.89).stroke("#cccccc");
+  doc.rect(20, 20, 555.28, 801.89).lineWidth(1).stroke("#111827");
 
   // Logo loading
   const logoPaths = [
@@ -671,183 +734,244 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
     }
   }
 
+  // Draw Left & Right Logos
   if (logoPath) {
-    doc.image(logoPath, 40, 35, { width: 65 });
+    doc.image(logoPath, 35, 30, { width: 50 });
+    doc.image(logoPath, 510, 30, { width: 50 });
   }
 
-  doc.fillColor("#1f2937");
-  doc.font("Helvetica-Bold").fontSize(18).text("TAIFA EBENEZER PREP. & J.H.S", 120, 40);
-  doc.fontSize(12).font("Helvetica").text("Terminal Report Card", 120, 62);
-  doc.fontSize(10).fillColor("#4b5563").text(`Academic Year: ${term?.academicYearLabel ?? ""} | ${term?.name ?? ""}`, 120, 78);
-
-  doc.moveTo(40, 110).lineTo(555, 110).stroke("#e5e7eb");
-
-  // Student Info Block
+  // Header Title Text
   doc.fillColor("#111827");
-  doc.font("Helvetica-Bold").fontSize(10).text("Student Name:", 40, 125);
-  doc.font("Helvetica").text((student.fullName || "").toUpperCase(), 130, 125);
+  doc.font("Helvetica-Bold").fontSize(15).text("TAIFA EBENEZER PREP. & JHS", 95, 33, { align: "center", width: 405 });
+  doc.fontSize(8).font("Helvetica").text("P.O. BOX TA 198 | TAIFA-ACCRA", 95, 51, { align: "center", width: 405 });
+  doc.text("TEL: 0244085581 / 0245502914", 95, 63, { align: "center", width: 405 });
 
-  doc.font("Helvetica-Bold").text("Student ID:", 300, 125);
-  doc.font("Helvetica").text(student.studentIdNumber || "N/A", 390, 125);
+  // Report Card Sub-Header Box
+  doc.rect(35, 80, 525, 16).stroke("#111827");
+  doc.fontSize(8).font("Helvetica-Bold").text("END OF SECOND TERM REPORT: PRIMARY", 40, 84);
 
-  doc.font("Helvetica-Bold").text("Class Allocated:", 40, 145);
-  doc.font("Helvetica").text(student.className || "N/A", 130, 145);
+  // Student Info Box (y=98 to 158)
+  doc.rect(35, 98, 435, 60).stroke("#111827");
+  doc.rect(470, 98, 90, 60).stroke("#111827"); // PASSPORT PICTURE Slot
+  doc.fontSize(7).font("Helvetica-Bold").text("PASSPORT\n\nPICTURE", 470, 115, { align: "center", width: 90 });
 
-  doc.font("Helvetica-Bold").text("Term:", 300, 145);
-  doc.font("Helvetica").text(term?.name ?? "N/A", 390, 145);
+  // Student Info Rows
+  doc.fontSize(7.5).font("Helvetica-Bold").text("NAME:", 40, 104);
+  doc.font("Helvetica").text((student.fullName || "").toUpperCase(), 80, 104);
+  doc.moveTo(270, 98).lineTo(270, 158).stroke("#111827");
+  doc.font("Helvetica-Bold").text("ADMIN N°:", 275, 104);
+  doc.font("Helvetica").text(student.studentIdNumber || "N/A", 330, 104);
+  doc.moveTo(35, 118).lineTo(470, 118).stroke("#111827");
 
-  doc.moveTo(40, 165).lineTo(555, 165).stroke("#e5e7eb");
+  doc.font("Helvetica-Bold").text("CLASS:", 40, 124);
+  doc.font("Helvetica").text(student.className || "N/A", 80, 124);
+  doc.moveTo(125, 118).lineTo(125, 138).stroke("#111827");
+  doc.font("Helvetica-Bold").text("Term:", 130, 124);
+  doc.font("Helvetica").text(term?.name ?? "N/A", 160, 124);
+  doc.moveTo(205, 118).lineTo(205, 138).stroke("#111827");
+  doc.font("Helvetica-Bold").text("Class Size:", 210, 124);
+  doc.font("Helvetica").text(String(classStudents.length), 255, 124);
+  doc.font("Helvetica-Bold").text("Learner's Total Score:", 275, 124);
+  doc.font("Helvetica").text(String(totalScore), 380, 124);
+  doc.moveTo(35, 138).lineTo(470, 138).stroke("#111827");
 
-  // Subjects Table Header
-  let y = 180;
-  doc.rect(40, y, 515, 20).fill("#111827");
-  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(9);
-  doc.text("Subject Breakdown", 45, y + 6, { width: 180 });
-  doc.text("Avg", 240, y + 6, { width: 30, align: "center" });
-  doc.text("High", 275, y + 6, { width: 30, align: "center" });
-  doc.text("Low", 310, y + 6, { width: 30, align: "center" });
-  doc.text("Score", 345, y + 6, { width: 35, align: "center" });
-  doc.text("Rank", 385, y + 6, { width: 30, align: "center" });
-  doc.text("Grade", 420, y + 6, { width: 35, align: "center" });
-  doc.text("Remarks", 460, y + 6, { width: 90 });
+  doc.font("Helvetica-Bold").text("Next Term Re-\nopening Date", 40, 142);
+  doc.font("Helvetica").text("08-09-2026", 115, 146);
+  doc.font("Helvetica-Bold").text("Vacation\ndate", 275, 142);
+  doc.font("Helvetica").text("31-07-2026", 325, 146);
 
-  y += 20;
+  // Assessment Report Legend Grid (y=164 to 220)
+  doc.rect(35, 164, 525, 10).fill("#111827");
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(7).text("ASSESSMENT REPORT", 35, 166, { align: "center", width: 525 });
 
-  // Draw Rows
-  doc.fillColor("#1f2937").font("Helvetica").fontSize(8);
+  doc.rect(35, 174, 525, 48).stroke("#111827");
+  doc.moveTo(110, 174).lineTo(110, 222).stroke("#111827");
+  doc.moveTo(180, 174).lineTo(180, 222).stroke("#111827");
+  doc.moveTo(270, 174).lineTo(270, 222).stroke("#111827");
+  doc.moveTo(35, 182).lineTo(525, 182).stroke("#111827");
+
+  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(6.5);
+  doc.text("MARKS", 40, 176);
+  doc.text("GRADING", 115, 176);
+  doc.text("REMARKS", 185, 176);
+  doc.text("GRADE DESCRIPTION", 275, 176);
+
+  doc.font("Helvetica").fontSize(5.5);
+  const legendRows = [
+    { m: "100 - 80", g: "A", r: "ADVANCE", d: "Learner exceeds core requirement in terms of knowledge, skills and understanding and can transfer them automatically and flexibly through authentic performance tasks" },
+    { m: "79 - 68", g: "P", r: "PROFICIENCY", d: "Learner develops fundamental knowledge, skills and core understanding and transfers them independently through authentic performance tasks" },
+    { m: "67 - 54", g: "AP", r: "APPROACHING PROFICIENCY", d: "Learner develops fundamental knowledge, skills and core understanding; with little guidance; can transfer understanding through authentic performance task" },
+    { m: "53 - 40", g: "D", r: "DEVELOPING", d: "Learner possesses the minimum knowledge and skills but needs, help throughout the performance of authentic tasks." },
+    { m: "39 - Below", g: "B", r: "BEGINNING", d: "Learner is struggling with his/her understanding due to lack of essential knowledge and skills." }
+  ];
+
+  let legendY = 185;
+  for (const row of legendRows) {
+    doc.text(row.m, 40, legendY);
+    doc.text(row.g, 115, legendY);
+    doc.text(row.r, 185, legendY);
+    doc.text(row.d, 275, legendY, { width: 280 });
+    legendY += 7.2;
+    if (legendY < 220) {
+      doc.moveTo(35, legendY).lineTo(560, legendY).stroke("#e5e7eb");
+    }
+  }
+
+  // Subjects Table Grid (y=226 to 382)
+  doc.rect(35, 226, 525, 156).stroke("#111827");
+  doc.moveTo(215, 226).lineTo(215, 382).stroke("#111827");
+  doc.moveTo(295, 226).lineTo(295, 382).stroke("#111827");
+  doc.moveTo(375, 226).lineTo(375, 382).stroke("#111827");
+  doc.moveTo(415, 226).lineTo(415, 382).stroke("#111827");
+  doc.moveTo(455, 226).lineTo(455, 382).stroke("#111827");
+
+  // Sub headers for SBA and Exam
+  doc.moveTo(215, 238).lineTo(375, 238).stroke("#111827");
+  doc.moveTo(255, 238).lineTo(255, 371).stroke("#111827");
+  doc.moveTo(335, 238).lineTo(335, 371).stroke("#111827");
+  doc.moveTo(35, 250).lineTo(560, 250).stroke("#111827");
+
+  doc.font("Helvetica-Bold").fontSize(7);
+  doc.text("SUBJECTS", 40, 235);
+  doc.text("CLASS WORK", 215, 229, { width: 80, align: "center" });
+  doc.text("100%", 215, 240, { width: 40, align: "center" });
+  doc.text("50%", 255, 240, { width: 40, align: "center" });
+  doc.text("EXAMINATION", 295, 229, { width: 80, align: "center" });
+  doc.text("100%", 295, 240, { width: 40, align: "center" });
+  doc.text("50%", 335, 240, { width: 40, align: "center" });
+  doc.text("TOTAL\n100%", 375, 232, { width: 40, align: "center" });
+  doc.text("GRADE", 415, 235, { width: 40, align: "center" });
+  doc.text("REMARK", 455, 235, { width: 105, align: "center" });
+
+  let subjectY = 253;
   for (const sub of subjectResults) {
-    if (y > 600) {
-      doc.addPage();
-      doc.rect(20, 20, 555.28, 801.89).stroke("#cccccc");
-      y = 40;
+    const classWorkComp = sub.componentScores?.find(c => c.componentName.toLowerCase().includes("class") || c.componentName.toLowerCase().includes("sba"));
+    const examComp = sub.componentScores?.find(c => c.componentName.toLowerCase().includes("exam") || c.componentName.toLowerCase().includes("test"));
+
+    const classWorkRaw = classWorkComp ? classWorkComp.scoreValue : 0;
+    const classWorkMax = classWorkComp ? classWorkComp.maxScore : 100;
+    const classWorkPct = Math.round((classWorkRaw / classWorkMax) * 100);
+    const classWorkWeighted = classWorkComp ? classWorkComp.weightedScore : 0;
+
+    const examRaw = examComp ? examComp.scoreValue : 0;
+    const examMax = examComp ? examComp.maxScore : 100;
+    const examPct = Math.round((examRaw / examMax) * 100);
+    const examWeighted = examComp ? examComp.weightedScore : 0;
+
+    doc.moveTo(35, subjectY + 9).lineTo(560, subjectY + 9).stroke("#e5e7eb");
+
+    doc.fillColor("#111827").font("Helvetica-Bold").fontSize(6.5).text(sub.subjectName || "", 40, subjectY);
+    doc.font("Helvetica").fontSize(7);
+    doc.text(String(classWorkPct), 215, subjectY, { width: 40, align: "center" });
+    doc.text(classWorkWeighted.toFixed(0), 255, subjectY, { width: 40, align: "center" });
+    doc.text(String(examPct), 295, subjectY, { width: 40, align: "center" });
+    doc.text(examWeighted.toFixed(0), 335, subjectY, { width: 40, align: "center" });
+    doc.font("Helvetica-Bold").text(sub.total.toFixed(0), 375, subjectY, { width: 40, align: "center" });
+    doc.text(sub.grade || "N/A", 415, subjectY, { width: 40, align: "center" });
+    doc.font("Helvetica").text(sub.remark || "N/A", 460, subjectY);
+
+    subjectY += 10.7;
+  }
+
+  // TOTAL Row in Subjects Grid
+  doc.moveTo(35, 371).lineTo(560, 371).stroke("#111827");
+  doc.font("Helvetica-Bold").fontSize(7.5).text("TOTAL", 40, 373);
+  doc.text(totalScore.toFixed(0), 375, 373, { width: 40, align: "center" });
+
+  // Attendance block (y=388 to 400)
+  doc.rect(35, 388, 525, 12).stroke("#111827");
+  doc.font("Helvetica-Bold").fontSize(7).text("LEARNER'S TOTAL ATTENDANCE:", 40, 391);
+  const attendanceStr = metadata ? `${metadata.daysPresent}` : "0";
+  doc.font("Helvetica").text(attendanceStr, 175, 391);
+  doc.moveTo(270, 388).lineTo(270, 400).stroke("#111827");
+  doc.font("Helvetica-Bold").text("TOTAL SCHOOL DAYS:", 275, 391);
+  const totalDaysStr = metadata ? `${metadata.daysOpened}` : "0";
+  doc.font("Helvetica").text(totalDaysStr, 385, 391);
+
+  // Competencies & Bills Panel (y=406 to 530)
+  doc.rect(35, 406, 525, 120).stroke("#111827");
+  doc.moveTo(280, 406).lineTo(280, 526).stroke("#111827");
+
+  // Left Column - Assessment on Core Competencies
+  doc.rect(35, 406, 245, 12).fill("#111827");
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(6.5).text("ASSESSMENT ON CORE COMPETENCIES", 40, 409);
+  doc.text("SCORE", 210, 409);
+  doc.text("GRADE", 245, 409);
+  doc.moveTo(205, 406).lineTo(205, 526).stroke("#111827");
+  doc.moveTo(240, 406).lineTo(240, 526).stroke("#111827");
+
+  const competencyGrade = overallAverage >= 80 ? "A" : (overallAverage >= 68 ? "P" : (overallAverage >= 54 ? "AP" : (overallAverage >= 40 ? "D" : "B")));
+  const competencyMap = [
+    "Critical Thinking and Problem Solving",
+    "Creativity and Innovation",
+    "Communication Skills and Collaboration Skills",
+    "Cultural Identity and Global Citizenship",
+    "Personal Development and Leadership Skills",
+    "Digital Literacy"
+  ];
+
+  let compY = 422;
+  doc.fillColor("#111827").font("Helvetica").fontSize(6);
+  for (const compName of competencyMap) {
+    doc.text(compName, 40, compY, { width: 160 });
+    doc.text(competencyGrade, 245, compY, { width: 30, align: "center" });
+    compY += 14.8;
+    if (compY < 510) {
+      doc.moveTo(35, compY - 3).lineTo(280, compY - 3).stroke("#e5e7eb");
     }
+  }
 
-    doc.moveTo(40, y).lineTo(555, y).stroke("#e5e7eb");
+  // Core Competency Total Row
+  doc.moveTo(35, 511).lineTo(280, 511).stroke("#111827");
+  doc.font("Helvetica-Bold").text("TOTAL SCORE FOR CORE COMPETENCY", 40, 516);
+  doc.text("0", 210, 516, { width: 30, align: "center" });
 
-    doc.fillColor("#111827").font("Helvetica-Bold").text(sub.subjectName || "", 45, y + 6);
-    
-    let compText = "";
-    if (sub.componentScores && sub.componentScores.length > 0) {
-      compText = sub.componentScores.map((c: any) => `${c.componentName || "Component"}: ${c.scoreValue}/${c.maxScore}`).join(" | ");
-      doc.fillColor("#4b5563").font("Helvetica-Oblique").fontSize(7).text(compText, 45, y + 16, { width: 180 });
+  // Right Column - Terminal Bills
+  doc.rect(280, 406, 280, 12).fill("#111827");
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(7).text("TERMINAL BILLS", 290, 409);
+  doc.moveTo(480, 406).lineTo(480, 526).stroke("#111827");
+
+  const billMap = [
+    { label: "SCHOOL FEES", val: schoolFeesCurrent },
+    { label: "SCHOOL FEES ARREARS", val: schoolFeesArrears },
+    { label: "CLASSES FEES ARREARS", val: classesFeesArrears },
+    { label: "UNIFORMS ARREARS", val: uniformsArrears },
+    { label: "FEEDING FEES ARREARS", val: feedingFeesArrears },
+    { label: "BOOKS FEE ARREARS", val: booksArrears },
+    { label: "PRINTING FEE ARREARS", val: printingArrears }
+  ];
+
+  let billY = 422;
+  doc.fillColor("#111827").font("Helvetica").fontSize(6);
+  for (const bill of billMap) {
+    doc.text(bill.label, 290, billY);
+    if (bill.val > 0) {
+      doc.text(bill.val.toFixed(2), 485, billY, { width: 70, align: "right" });
     }
-
-    const rowHeight = compText ? 28 : 20;
-
-    doc.fillColor("#1f2937").font("Helvetica").fontSize(8);
-    doc.text(String(sub.classAverage), 240, y + 6, { width: 30, align: "center" });
-    doc.text(String(sub.classHighest), 275, y + 6, { width: 30, align: "center" });
-    doc.text(String(sub.classLowest), 310, y + 6, { width: 30, align: "center" });
-    doc.font("Helvetica-Bold").text(String(sub.total), 345, y + 6, { width: 35, align: "center" });
-    doc.font("Helvetica").text(`${sub.subjectRank}/${classStudents.length}`, 385, y + 6, { width: 30, align: "center" });
-    doc.font("Helvetica-Bold").text(sub.grade || "N/A", 420, y + 6, { width: 35, align: "center" });
-    doc.font("Helvetica").text(sub.remark || "N/A", 460, y + 6, { width: 90 });
-
-    y += rowHeight;
+    billY += 12.8;
+    if (billY < 510) {
+      doc.moveTo(280, billY - 2).lineTo(560, billY - 2).stroke("#e5e7eb");
+    }
   }
 
-  doc.moveTo(40, y).lineTo(555, y).stroke("#111827");
-  y += 15;
+  // Terminal Bills Total Row
+  doc.moveTo(280, 511).lineTo(560, 511).stroke("#111827");
+  doc.font("Helvetica-Bold").text("TOTAL(GHC)", 290, 516);
+  doc.text(totalOutstandingBill.toFixed(2), 485, 516, { width: 70, align: "right" });
 
-  if (y > 600) {
-    doc.addPage();
-    doc.rect(20, 20, 555.28, 801.89).stroke("#cccccc");
-    y = 40;
-  }
+  // Teacher info names and signatures (y=540)
+  doc.font("Helvetica-Bold").fontSize(7.5).text("Class teacher's Name:", 35, 545);
+  doc.font("Helvetica").text(student.classTeacherName || "MISS EVELYN NYONATOR", 130, 545);
 
-  const startRemarksY = y;
-  // Left column: Behavioral Traits
-  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(10).text("ATTENDANCE & BEHAVIOR", 40, y);
-  doc.moveTo(40, y + 14).lineTo(280, y + 14).stroke("#e5e7eb");
-  
-  y += 20;
-  doc.fontSize(8).font("Helvetica-Bold").text("Days Present:", 40, y);
-  const attendancePct = metadata && metadata.daysOpened > 0 ? Math.round((metadata.daysPresent / metadata.daysOpened) * 100) : 0;
-  doc.font("Helvetica").text(metadata ? `${metadata.daysPresent} of ${metadata.daysOpened} (${attendancePct}%)` : "—", 140, y);
+  doc.font("Helvetica-Bold").text("Head teacher's Name:", 295, 545);
+  doc.font("Helvetica").text("STEPHEN K. ADUKOR (SIR ZITO)", 395, 545);
 
-  y += 14;
-  doc.font("Helvetica-Bold").text("General Conduct:", 40, y);
-  doc.font("Helvetica").text((metadata && metadata.conduct) || "—", 140, y);
+  // Signature dividers
+  doc.moveTo(35, 595).lineTo(180, 595).lineWidth(0.8).stroke("#111827");
+  doc.font("Helvetica-Bold").text("Signature:", 35, 600);
 
-  y += 14;
-  doc.font("Helvetica-Bold").text("Attitude to Work:", 40, y);
-  doc.font("Helvetica").text((metadata && metadata.attitude) || "—", 140, y);
-
-  y += 14;
-  doc.font("Helvetica-Bold").text("Special Interest:", 40, y);
-  doc.font("Helvetica").text((metadata && metadata.interest) || "—", 140, y);
-
-  // Right column: General Remarks
-  let rightY = startRemarksY;
-  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(10).text("GENERAL COMMENTS", 315, rightY);
-  doc.moveTo(315, rightY + 14).lineTo(555, rightY + 14).stroke("#e5e7eb");
-
-  rightY += 20;
-  doc.fontSize(8).font("Helvetica-Bold").text("Class Teacher's Remarks:", 315, rightY);
-  doc.font("Helvetica-Oblique").text(`"${(metadata && metadata.teacherRemarks) || "A hardworking and pleasant student."}"`, 315, rightY + 12, { width: 240 });
-
-  rightY += 35;
-  doc.font("Helvetica-Bold").text("Headmaster's Remarks:", 315, rightY);
-  doc.font("Helvetica-Oblique").text(`"${(metadata && metadata.headmasterRemarks) || "Satisfactory terminal results. Promoted."}"`, 315, rightY + 12, { width: 240 });
-
-  y = Math.max(y, rightY + 40) + 15;
-
-  // Overall Summary Panel
-  if (y > 640) {
-    doc.addPage();
-    doc.rect(20, 20, 555.28, 801.89).stroke("#cccccc");
-    y = 40;
-  }
-
-  doc.rect(40, y, 515, 55).fill("#f3f4f6");
-  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(9).text("OVERALL PERFORMANCE SUMMARY", 50, y + 8);
-  
-  doc.fontSize(8);
-  doc.font("Helvetica-Bold").text("Accumulated Score:", 50, y + 24);
-  doc.font("Helvetica").text(String(totalScore), 160, y + 24);
-
-  doc.font("Helvetica-Bold").text("Terminal Average:", 50, y + 38);
-  doc.font("Helvetica").text(`${overallAverage}%`, 160, y + 38);
-
-  doc.font("Helvetica-Bold").text("Class Position:", 315, y + 24);
-  doc.font("Helvetica").text(`${overallPosition} of ${classStudents.length} students`, 405, y + 24);
-
-  y += 65;
-
-  if (y > 700) {
-    doc.addPage();
-    doc.rect(20, 20, 555.28, 801.89).stroke("#cccccc");
-    y = 40;
-  }
-
-  // Draw school fees card box
-  doc.rect(40, y, 515, 30).fill("#f9fafb");
-  doc.rect(40, y, 515, 30).stroke("#e5e7eb");
-
-  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(8).text("SCHOOL FEES STATUS", 50, y + 10);
-  doc.font("Helvetica").fillColor("#4b5563").text(`Total Bill: GH₵ ${totalFeesDue.toFixed(2)}`, 180, y + 10);
-  doc.text(`Total Paid: GH₵ ${totalFeesPaid.toFixed(2)}`, 300, y + 10);
-
-  if (outstandingBalance > 0.01) {
-    doc.fillColor("#b91c1c").font("Helvetica-Bold").text(`Outstanding Balance: GH₵ ${outstandingBalance.toFixed(2)}`, 420, y + 10);
-  } else {
-    doc.fillColor("#16a34a").font("Helvetica-Bold").text(`Outstanding Balance: GH₵ 0.00 (PAID)`, 420, y + 10);
-  }
-
-  y += 45;
-
-  // Signatures
-  if (y > 720) {
-    doc.addPage();
-    doc.rect(20, 20, 555.28, 801.89).stroke("#cccccc");
-    y = 40;
-  }
-
-  doc.moveTo(50, y + 20).lineTo(220, y + 20).stroke("#9ca3af");
-  doc.fillColor("#4b5563").font("Helvetica-Bold").fontSize(8).text("CLASS TEACHER'S SIGNATURE", 50, y + 26, { width: 170, align: "center" });
-
-  doc.moveTo(375, y + 20).lineTo(545, y + 20).stroke("#9ca3af");
-  doc.text("HEADMASTER'S SIGNATURE", 375, y + 26, { width: 170, align: "center" });
+  doc.moveTo(380, 595).lineTo(525, 595).stroke("#111827");
+  doc.font("Helvetica-Bold").text("Sign:", 380, 600);
 
   doc.end();
 });
