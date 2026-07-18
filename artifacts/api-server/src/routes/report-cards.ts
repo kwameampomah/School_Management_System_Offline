@@ -18,6 +18,7 @@ import {
   teacherAssignmentsTable,
   studentTermMetadataTable,
   usersTable,
+  studentFeesTable,
 } from "@workspace/db";
 import { requireAuth, requireAdmin, requireTeacher } from "../middlewares/auth";
 import { validate } from "../middlewares/validation";
@@ -622,6 +623,25 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
       ),
     );
 
+  // Fetch school fees billed and paid for this student in this term
+  const studentFees = await db
+    .select()
+    .from(studentFeesTable)
+    .where(
+      and(
+        eq(studentFeesTable.studentId, studentId),
+        eq(studentFeesTable.termId, termId)
+      )
+    );
+
+  let totalFeesDue = 0;
+  let totalFeesPaid = 0;
+  for (const fee of studentFees) {
+    totalFeesDue += parseFloat(fee.amountDue);
+    totalFeesPaid += parseFloat(fee.amountPaid);
+  }
+  const outstandingBalance = totalFeesDue - totalFeesPaid;
+
   // Initialize PDF document
   const doc = new PDFDocument({ size: "A4", margin: 40 });
 
@@ -792,7 +812,29 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
   doc.font("Helvetica-Bold").text("Class Position:", 315, y + 24);
   doc.font("Helvetica").text(`${overallPosition} of ${classStudents.length} students`, 405, y + 24);
 
-  y += 75;
+  y += 65;
+
+  if (y > 700) {
+    doc.addPage();
+    doc.rect(20, 20, 555.28, 801.89).stroke("#cccccc");
+    y = 40;
+  }
+
+  // Draw school fees card box
+  doc.rect(40, y, 515, 30).fill("#f9fafb");
+  doc.rect(40, y, 515, 30).stroke("#e5e7eb");
+
+  doc.fillColor("#111827").font("Helvetica-Bold").fontSize(8).text("SCHOOL FEES STATUS", 50, y + 10);
+  doc.font("Helvetica").fillColor("#4b5563").text(`Total Bill: GH₵ ${totalFeesDue.toFixed(2)}`, 180, y + 10);
+  doc.text(`Total Paid: GH₵ ${totalFeesPaid.toFixed(2)}`, 300, y + 10);
+
+  if (outstandingBalance > 0.01) {
+    doc.fillColor("#b91c1c").font("Helvetica-Bold").text(`Outstanding Balance: GH₵ ${outstandingBalance.toFixed(2)}`, 420, y + 10);
+  } else {
+    doc.fillColor("#16a34a").font("Helvetica-Bold").text(`Outstanding Balance: GH₵ 0.00 (PAID)`, 420, y + 10);
+  }
+
+  y += 45;
 
   // Signatures
   if (y > 720) {

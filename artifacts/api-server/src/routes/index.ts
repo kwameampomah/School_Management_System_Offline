@@ -17,6 +17,7 @@ import studentTermMetadataRouter from "./student-term-metadata";
 import promotionsRouter from "./promotions";
 import notificationsRouter from "./notifications";
 import attendanceRouter from "./attendance";
+import feesRouter from "./fees";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(studentTermMetadataRouter);
 router.use(promotionsRouter);
 router.use(notificationsRouter);
 router.use(attendanceRouter);
+router.use(feesRouter);
 
 export default router;
