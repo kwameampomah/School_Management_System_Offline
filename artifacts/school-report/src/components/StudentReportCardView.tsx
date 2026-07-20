@@ -76,12 +76,12 @@ export default function StudentReportCardView({ reportCard }: { reportCard: Stud
   const daysPresent = reportCard.metadata?.daysPresent ?? 0;
 
   return (
-    <div className="w-full max-w-[850px] mx-auto bg-white text-black font-sans p-4 sm:p-8 border border-black shadow-lg print:shadow-none print:border-0 print:p-0">
+    <div className="w-full max-w-[850px] mx-auto bg-white text-black font-sans p-4 sm:p-6 border border-black shadow-lg print:shadow-none print:border-0 print:p-0 print:w-full print:max-w-none print:m-0 print:text-black">
       {/* 1. Header Box */}
       <div className="border border-black p-3 mb-2 flex items-center justify-between text-center">
         <img src="/logo.png" alt="Logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain" />
         <div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-wide">TAIFA EBENEZER PREP. & JHS</h1>
+          <h1 className="text-xl sm:text-2xl font-black tracking-wide uppercase">TAIFA EBENEZER PREP. & JHS</h1>
           <p className="text-xs font-semibold">P.O.BOX TA 198</p>
           <p className="text-xs font-semibold">TAIFA-ACCRA</p>
           <p className="text-xs font-bold mt-0.5">TEL: 0244085581 / 0245502914</p>
@@ -91,23 +91,24 @@ export default function StudentReportCardView({ reportCard }: { reportCard: Stud
 
       {/* 2. Student Bio Section Grid */}
       <div className="border border-black mb-2 text-xs">
-        <div className="grid grid-cols-12 border-b border-black font-bold text-center bg-gray-100/50">
+        <div className="grid grid-cols-12 border-b border-black font-bold text-center bg-gray-100/50 print:bg-transparent">
           <div className="col-span-8 p-1 text-left uppercase pl-2">
             END OF {reportCard.termName?.toUpperCase() || "SECOND TERM"} REPORT: {isPrimary ? "PRIMARY" : "JHS"}
           </div>
           <div className="col-span-4 p-1 border-l border-black flex justify-between px-2">
             <span>ADMIN N°:</span>
-            <span>{reportCard.studentIdNumber}</span>
+            <span className="font-mono">{reportCard.studentIdNumber}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-12 border-b border-black">
-          <div className="col-span-9 p-1.5 flex gap-2 font-bold">
+          <div className="col-span-9 p-1.5 flex gap-2 font-bold items-center">
             <span>NAME:</span>
-            <span className="font-normal italic uppercase">{reportCard.studentName}</span>
+            <span className="font-normal italic uppercase text-sm">{reportCard.studentName}</span>
           </div>
-          <div className="col-span-3 border-l border-black p-1 text-center font-bold text-[10px] text-gray-500 flex items-center justify-center min-h-[50px]">
-            PASSPORT PICTURE
+          <div className="col-span-3 border-l border-black p-1 text-center font-bold text-[10px] text-gray-500 flex flex-col items-center justify-center min-h-[50px]">
+            <span>PASSPORT</span>
+            <span>PICTURE</span>
           </div>
         </div>
 
@@ -119,26 +120,26 @@ export default function StudentReportCardView({ reportCard }: { reportCard: Stud
             <span className="font-bold">Term:</span> <span>{reportCard.termName}</span>
           </div>
           <div className="col-span-3 p-1 border-r border-black flex justify-between px-2">
-            <span className="font-bold">Class Size:</span> <span>{reportCard.totalStudents || 0}</span>
+            <span className="font-bold">Class Size:</span> <span className="font-mono">{reportCard.totalStudents || 0}</span>
           </div>
           <div className="col-span-3 p-1 flex justify-between px-2">
-            <span className="font-bold">Learner's Total Score:</span> <span>{overallTotal}</span>
+            <span className="font-bold">Learner's Total Score:</span> <span className="font-mono">{overallTotal}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-12 text-center font-semibold">
           <div className="col-span-6 p-1 border-r border-black flex justify-between px-2">
-            <span className="font-bold">Next Term Re-opening Date:</span> <span>0</span>
+            <span className="font-bold">Next Term Re-opening Date:</span> <span>-</span>
           </div>
           <div className="col-span-6 p-1 flex justify-between px-2">
-            <span className="font-bold">Vacation date:</span> <span>0</span>
+            <span className="font-bold">Vacation date:</span> <span>-</span>
           </div>
         </div>
       </div>
 
       {/* 3. Assessment Report Legend Table */}
       <div className="border border-black mb-2 text-[10px]">
-        <div className="font-bold text-center border-b border-black py-0.5 bg-gray-100/50 uppercase tracking-wider text-xs">
+        <div className="font-bold text-center border-b border-black py-0.5 bg-gray-100/50 print:bg-transparent uppercase tracking-wider text-xs">
           ASSESSMENT REPORT
         </div>
         <table className="w-full border-collapse text-left">
@@ -221,7 +222,7 @@ export default function StudentReportCardView({ reportCard }: { reportCard: Stud
       <div className="grid grid-cols-12 gap-2 mb-2 text-xs">
         {/* Left Side: Core Competencies */}
         <div className="col-span-7 border border-black text-[11px]">
-          <div className="font-bold text-center border-b border-black p-1 bg-gray-100/50 text-[10px]">
+          <div className="font-bold text-center border-b border-black p-1 bg-gray-100/50 print:bg-transparent text-[10px]">
             ASSESSMENT ON CORE COMPETENCIES
           </div>
           <table className="w-full border-collapse">
@@ -251,7 +252,7 @@ export default function StudentReportCardView({ reportCard }: { reportCard: Stud
 
         {/* Right Side: Terminal Bills */}
         <div className="col-span-5 border border-black text-[11px]">
-          <div className="font-bold text-center border-b border-black p-1 bg-gray-100/50 text-[10px]">
+          <div className="font-bold text-center border-b border-black p-1 bg-gray-100/50 print:bg-transparent text-[10px]">
             TERMINAL BILLS
           </div>
           <table className="w-full border-collapse">
@@ -284,7 +285,7 @@ export default function StudentReportCardView({ reportCard }: { reportCard: Stud
                 <td className="p-1 border-r border-black font-semibold">PRINTING FEE ARREARS</td>
                 <td className="p-1 text-right font-mono"></td>
               </tr>
-              <tr className="font-bold bg-gray-100/50">
+              <tr className="font-bold bg-gray-100/50 print:bg-transparent">
                 <td className="p-1 border-r border-black">TOTAL(GHC)</td>
                 <td className="p-1 text-right font-mono font-bold text-sm">500</td>
               </tr>
