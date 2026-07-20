@@ -924,7 +924,7 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
   // Core Competency Total Row
   doc.moveTo(35, 511).lineTo(280, 511).stroke("#111827");
   doc.font("Helvetica-Bold").text("TOTAL SCORE FOR CORE COMPETENCY", 40, 516);
-  doc.text("0", 210, 516, { width: 30, align: "center" });
+  doc.text(String(Math.round(totalScore)), 210, 516, { width: 30, align: "center" });
 
   // Right Column - Terminal Bills
   doc.rect(280, 406, 280, 12).fill("#111827");
