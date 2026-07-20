@@ -4,7 +4,7 @@ export default function StudentReportCardView({ reportCard }: { reportCard: Stud
   if (!reportCard) return null;
 
   const isPrimary = !(reportCard.className || "").toLowerCase().includes("jhs");
-  const overallTotal = reportCard.subjectResults?.reduce((acc, s) => acc + s.total, 0) || 0;
+  const overallTotal = Math.round(reportCard.subjectResults?.reduce((acc, s) => acc + s.total, 0) || 0);
 
   // SBC Primary grading legend rules
   const sbcLegend = [
@@ -34,23 +34,27 @@ export default function StudentReportCardView({ reportCard }: { reportCard: Stud
   const displaySubjects = isPrimary
     ? primarySubjectsList.map(name => {
         const match = reportCard.subjectResults?.find(s => s.subjectName.toUpperCase().trim() === name || name.includes(s.subjectName.toUpperCase().trim()));
+        const score100 = match ? Math.round(match.total) : 0;
         return {
           name,
-          classWork50: match ? Math.round(match.total * 0.5) : 0,
-          exam50: match ? Math.round(match.total * 0.5) : 0,
-          total100: match ? match.total : 0,
+          classWork50: Math.round(score100 * 0.5),
+          exam50: Math.round(score100 * 0.5),
+          total100: score100,
           grade: match?.grade || "B",
           remark: match?.remark || "BEGINNING",
         };
       })
-    : (reportCard.subjectResults || []).map(s => ({
-        name: s.subjectName.toUpperCase(),
-        classWork50: Math.round(s.total * 0.5),
-        exam50: Math.round(s.total * 0.5),
-        total100: s.total,
-        grade: s.grade || "B",
-        remark: s.remark || "BEGINNING",
-      }));
+    : (reportCard.subjectResults || []).map(s => {
+        const score100 = Math.round(s.total);
+        return {
+          name: s.subjectName.toUpperCase(),
+          classWork50: Math.round(score100 * 0.5),
+          exam50: Math.round(score100 * 0.5),
+          total100: score100,
+          grade: s.grade || "B",
+          remark: s.remark || "BEGINNING",
+        };
+      });
 
   // Core Competencies calculation from terminal average
   const compAvg = displaySubjects.length > 0 ? overallTotal / displaySubjects.length : 0;
@@ -76,249 +80,306 @@ export default function StudentReportCardView({ reportCard }: { reportCard: Stud
   const daysPresent = reportCard.metadata?.daysPresent ?? 0;
 
   return (
-    <div className="w-full max-w-[850px] mx-auto bg-white text-black font-sans p-4 sm:p-6 border border-black shadow-lg print:shadow-none print:border-0 print:p-0 print:w-full print:max-w-none print:m-0 print:text-black">
-      {/* 1. Header Box */}
-      <div className="border border-black p-3 mb-2 flex items-center justify-between text-center">
-        <img src="/logo.png" alt="Logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain" />
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-wide uppercase">TAIFA EBENEZER PREP. & JHS</h1>
-          <p className="text-xs font-semibold">P.O.BOX TA 198</p>
-          <p className="text-xs font-semibold">TAIFA-ACCRA</p>
-          <p className="text-xs font-bold mt-0.5">TEL: 0244085581 / 0245502914</p>
-        </div>
-        <img src="/logo.png" alt="Logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain" />
-      </div>
+    <div style={{ width: "100%", maxWidth: "800px", margin: "0 auto", backgroundColor: "#ffffff", color: "#000000", fontFamily: "sans-serif", fontSize: "11px", padding: "12px", boxSizing: "border-box" }}>
+      {/* 1. Header Box Table */}
+      <table style={{ width: "100%", border: "1px solid #000000", borderCollapse: "collapse", marginBottom: "6px" }}>
+        <tbody>
+          <tr>
+            <td style={{ width: "15%", textAlign: "center", padding: "6px", verticalAlign: "middle" }}>
+              <img src="/logo.png" alt="Logo" style={{ width: "50px", height: "50px", objectFit: "contain", display: "inline-block" }} />
+            </td>
+            <td style={{ width: "70%", textAlign: "center", padding: "4px", verticalAlign: "middle" }}>
+              <div style={{ fontSize: "18px", fontWeight: "900", letterSpacing: "0.5px" }}>TAIFA EBENEZER PREP. & JHS</div>
+              <div style={{ fontSize: "10px", fontWeight: "600" }}>P.O.BOX TA 198</div>
+              <div style={{ fontSize: "10px", fontWeight: "600" }}>TAIFA-ACCRA</div>
+              <div style={{ fontSize: "10px", fontWeight: "700", marginTop: "2px" }}>TEL: 0244085581 / 0245502914</div>
+            </td>
+            <td style={{ width: "15%", textAlign: "center", padding: "6px", verticalAlign: "middle" }}>
+              <img src="/logo.png" alt="Logo" style={{ width: "50px", height: "50px", objectFit: "contain", display: "inline-block" }} />
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-      {/* 2. Student Bio Section Grid with Full Right-Side Passport Picture Box */}
-      <div className="border border-black mb-2 text-xs flex">
-        {/* Left Side Bio Grid (78% width) */}
-        <div className="w-[78%] border-r border-black">
-          {/* Row 1: Term Report Title & Admin N° */}
-          <div className="flex border-b border-black font-bold text-center bg-gray-100/50 print:bg-transparent">
-            <div className="w-[62%] p-1 text-left uppercase pl-2 border-r border-black">
-              END OF {reportCard.termName?.toUpperCase() || "SECOND TERM"} REPORT: {isPrimary ? "PRIMARY" : "JHS"}
-            </div>
-            <div className="w-[38%] p-1 flex justify-between px-2">
-              <span>ADMIN N°</span>
-              <span className="font-mono">{reportCard.studentIdNumber || "0"}</span>
-            </div>
-          </div>
+      {/* 2. Student Bio Section Grid (2-Column Outer Table for 100% Print Immunity) */}
+      <table style={{ width: "100%", border: "1px solid #000000", borderCollapse: "collapse", marginBottom: "6px" }}>
+        <tbody>
+          <tr>
+            {/* Left Main Bio Grid (78% width) */}
+            <td style={{ width: "78%", borderRight: "1px solid #000000", verticalAlign: "top", padding: "0" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  {/* Row 1: Term Report Title & Admin N° */}
+                  <tr style={{ borderBottom: "1px solid #000000", backgroundColor: "#f3f4f6" }}>
+                    <td style={{ width: "65%", padding: "4px 8px", fontWeight: "bold", textTransform: "uppercase", borderRight: "1px solid #000000" }}>
+                      END OF {reportCard.termName?.toUpperCase() || "SECOND TERM"} REPORT: {isPrimary ? "PRIMARY" : "JHS"}
+                    </td>
+                    <td style={{ width: "35%", padding: "4px 8px", fontWeight: "bold" }}>
+                      <span style={{ marginRight: "6px" }}>ADMIN N°</span>
+                      <span style={{ fontFamily: "monospace" }}>{reportCard.studentIdNumber || "0"}</span>
+                    </td>
+                  </tr>
 
-          {/* Row 2: Student Name */}
-          <div className="flex border-b border-black p-1.5 font-bold gap-2 items-center">
-            <span>NAME:</span>
-            <span className="font-normal italic uppercase text-sm">{reportCard.studentName || "0"}</span>
-          </div>
+                  {/* Row 2: Student Name */}
+                  <tr style={{ borderBottom: "1px solid #000000" }}>
+                    <td colSpan={2} style={{ padding: "5px 8px", fontWeight: "bold" }}>
+                      <span style={{ marginRight: "6px" }}>NAME:</span>
+                      <span style={{ fontWeight: "normal", fontStyle: "italic", textTransform: "uppercase", fontSize: "12px" }}>{reportCard.studentName || "0"}</span>
+                    </td>
+                  </tr>
 
-          {/* Row 3: Class, Term, Class Size, Learner's Total Score */}
-          <div className="grid grid-cols-4 border-b border-black text-center font-semibold">
-            <div className="p-1 border-r border-black flex justify-between px-1">
-              <span className="font-bold">CLASS:</span> <span>{reportCard.className || "0"}</span>
-            </div>
-            <div className="p-1 border-r border-black flex justify-between px-1">
-              <span className="font-bold">Term:</span> <span>{reportCard.termName || "0"}</span>
-            </div>
-            <div className="p-1 border-r border-black flex justify-between px-1">
-              <span className="font-bold">Class Size</span> <span className="font-mono">{reportCard.totalStudents || 0}</span>
-            </div>
-            <div className="p-1 flex justify-between px-1">
-              <span className="font-bold">Learner's Total Score</span> <span className="font-mono">{overallTotal || 0}</span>
-            </div>
-          </div>
+                  {/* Row 3: Class, Term, Class Size, Learner's Total Score */}
+                  <tr style={{ borderBottom: "1px solid #000000" }}>
+                    <td colSpan={2} style={{ padding: "0" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center" }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ width: "25%", padding: "4px 2px", borderRight: "1px solid #000000" }}>
+                              <span style={{ fontWeight: "bold", marginRight: "4px" }}>CLASS:</span>
+                              <span>{reportCard.className || "0"}</span>
+                            </td>
+                            <td style={{ width: "25%", padding: "4px 2px", borderRight: "1px solid #000000" }}>
+                              <span style={{ fontWeight: "bold", marginRight: "4px" }}>Term:</span>
+                              <span>{reportCard.termName || "0"}</span>
+                            </td>
+                            <td style={{ width: "25%", padding: "4px 2px", borderRight: "1px solid #000000" }}>
+                              <span style={{ fontWeight: "bold", marginRight: "4px" }}>Class Size</span>
+                              <span style={{ fontFamily: "monospace" }}>{reportCard.totalStudents || 0}</span>
+                            </td>
+                            <td style={{ width: "25%", padding: "4px 2px" }}>
+                              <span style={{ fontWeight: "bold", marginRight: "4px" }}>Learner's Total Score</span>
+                              <span style={{ fontFamily: "monospace", fontWeight: "bold" }}>{overallTotal}</span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
 
-          {/* Row 4: Re-opening & Vacation Dates */}
-          <div className="grid grid-cols-2 text-center font-semibold">
-            <div className="p-1 border-r border-black flex justify-between px-2">
-              <span className="font-bold">Next Term Re-opening Date</span> <span>0</span>
-            </div>
-            <div className="p-1 flex justify-between px-2">
-              <span className="font-bold">Vacation date</span> <span>0</span>
-            </div>
-          </div>
-        </div>
+                  {/* Row 4: Re-opening & Vacation Dates */}
+                  <tr>
+                    <td colSpan={2} style={{ padding: "0" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <tbody>
+                          <tr>
+                            <td style={{ width: "50%", padding: "4px 8px", borderRight: "1px solid #000000" }}>
+                              <span style={{ fontWeight: "bold", marginRight: "8px" }}>Next Term Re-opening Date</span>
+                              <span>0</span>
+                            </td>
+                            <td style={{ width: "50%", padding: "4px 8px" }}>
+                              <span style={{ fontWeight: "bold", marginRight: "8px" }}>Vacation date</span>
+                              <span>0</span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
 
-        {/* Right Side: Passport Picture Box (22% width, full height) */}
-        <div className="w-[22%] flex flex-col items-center justify-center p-2 text-center font-bold text-xs tracking-wider text-gray-700 bg-gray-50/50 print:bg-transparent">
-          <div>PASSPORT</div>
-          <div>PICTURE</div>
-        </div>
-      </div>
+            {/* Right Side: Passport Picture Box (22% width, full height) */}
+            <td style={{ width: "22%", verticalAlign: "middle", textAlign: "center", fontWeight: "bold", fontSize: "10px", color: "#374151", padding: "8px", backgroundColor: "#f9fafb" }}>
+              <div>PASSPORT</div>
+              <div style={{ marginTop: "4px" }}>PICTURE</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       {/* 3. Assessment Report Legend Table */}
-      <div className="border border-black mb-2 text-[10px]">
-        <div className="font-bold text-center border-b border-black py-0.5 bg-gray-100/50 print:bg-transparent uppercase tracking-wider text-xs">
-          ASSESSMENT REPORT
-        </div>
-        <table className="w-full border-collapse text-left">
-          <thead>
-            <tr className="border-b border-black font-bold text-center">
-              <th className="border-r border-black p-1 w-[80px]">MARKS</th>
-              <th className="border-r border-black p-1 w-[60px]">GRADING</th>
-              <th className="border-r border-black p-1 w-[130px]">REMARKS</th>
-              <th className="p-1">GRADE DESCRIPTION</th>
+      <table style={{ width: "100%", border: "1px solid #000000", borderCollapse: "collapse", marginBottom: "6px", fontSize: "9.5px" }}>
+        <thead>
+          <tr style={{ backgroundColor: "#f3f4f6", borderBottom: "1px solid #000000" }}>
+            <th colSpan={4} style={{ padding: "3px", textAlign: "center", textTransform: "uppercase", fontSize: "10px", fontWeight: "bold" }}>
+              ASSESSMENT REPORT
+            </th>
+          </tr>
+          <tr style={{ borderBottom: "1px solid #000000", textAlign: "center", fontWeight: "bold" }}>
+            <th style={{ width: "80px", borderRight: "1px solid #000000", padding: "3px" }}>MARKS</th>
+            <th style={{ width: "60px", borderRight: "1px solid #000000", padding: "3px" }}>GRADING</th>
+            <th style={{ width: "130px", borderRight: "1px solid #000000", padding: "3px" }}>REMARKS</th>
+            <th style={{ padding: "3px", textAlign: "left" }}>GRADE DESCRIPTION</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sbcLegend.map((item, idx) => (
+            <tr key={idx} style={{ borderBottom: idx < sbcLegend.length - 1 ? "1px solid #000000" : "none" }}>
+              <td style={{ borderRight: "1px solid #000000", padding: "2.5px", textAlign: "center", fontWeight: "bold" }}>{item.range}</td>
+              <td style={{ borderRight: "1px solid #000000", padding: "2.5px", textAlign: "center", fontWeight: "bold" }}>{item.grade}</td>
+              <td style={{ borderRight: "1px solid #000000", padding: "2.5px", textAlign: "center", fontWeight: "bold" }}>{item.remark}</td>
+              <td style={{ padding: "2.5px", lineHeight: "1.2" }}>{item.desc}</td>
             </tr>
-          </thead>
-          <tbody>
-            {sbcLegend.map((item, idx) => (
-              <tr key={idx} className="border-b border-black last:border-0">
-                <td className="border-r border-black p-1 text-center font-bold">{item.range}</td>
-                <td className="border-r border-black p-1 text-center font-bold">{item.grade}</td>
-                <td className="border-r border-black p-1 text-center font-bold">{item.remark}</td>
-                <td className="p-1 leading-tight">{item.desc}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
 
       {/* 4. Subjects Table */}
-      <div className="border border-black mb-2 text-xs">
-        <table className="w-full border-collapse text-center">
-          <thead>
-            <tr className="border-b border-black font-bold">
-              <th className="border-r border-black p-1.5 text-left w-[40%]" rowSpan={2}>SUBJECTS</th>
-              <th className="border-r border-black p-0.5" colSpan={2}>CLASS WORK</th>
-              <th className="border-r border-black p-0.5" colSpan={2}>EXAMINATION</th>
-              <th className="border-r border-black p-0.5" rowSpan={2}>TOTAL<br/>100%</th>
-              <th className="border-r border-black p-0.5" rowSpan={2}>GRADE</th>
-              <th className="p-0.5" rowSpan={2}>REMARK</th>
+      <table style={{ width: "100%", border: "1px solid #000000", borderCollapse: "collapse", marginBottom: "6px", textAlign: "center" }}>
+        <thead>
+          <tr style={{ borderBottom: "1px solid #000000", fontWeight: "bold" }}>
+            <th rowSpan={2} style={{ borderRight: "1px solid #000000", padding: "4px", textAlign: "left", width: "38%" }}>SUBJECTS</th>
+            <th colSpan={2} style={{ borderRight: "1px solid #000000", padding: "2px" }}>CLASS WORK</th>
+            <th colSpan={2} style={{ borderRight: "1px solid #000000", padding: "2px" }}>EXAMINATION</th>
+            <th rowSpan={2} style={{ borderRight: "1px solid #000000", padding: "2px" }}>TOTAL<br/>100%</th>
+            <th rowSpan={2} style={{ borderRight: "1px solid #000000", padding: "2px" }}>GRADE</th>
+            <th rowSpan={2} style={{ padding: "2px" }}>REMARK</th>
+          </tr>
+          <tr style={{ borderBottom: "1px solid #000000", fontWeight: "bold" }}>
+            <th style={{ borderRight: "1px solid #000000", padding: "2px", width: "8%" }}>100%</th>
+            <th style={{ borderRight: "1px solid #000000", padding: "2px", width: "8%" }}>50%</th>
+            <th style={{ borderRight: "1px solid #000000", padding: "2px", width: "8%" }}>100%</th>
+            <th style={{ borderRight: "1px solid #000000", padding: "2px", width: "8%" }}>50%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {displaySubjects.map((sub, idx) => (
+            <tr key={idx} style={{ borderBottom: "1px solid #000000" }}>
+              <td style={{ borderRight: "1px solid #000000", padding: "3px 5px", textAlign: "left", fontWeight: "bold" }}>{sub.name}</td>
+              <td style={{ borderRight: "1px solid #000000", padding: "3px" }}></td>
+              <td style={{ borderRight: "1px solid #000000", padding: "3px", fontFamily: "monospace" }}>{sub.classWork50}</td>
+              <td style={{ borderRight: "1px solid #000000", padding: "3px" }}></td>
+              <td style={{ borderRight: "1px solid #000000", padding: "3px", fontFamily: "monospace" }}>{sub.exam50}</td>
+              <td style={{ borderRight: "1px solid #000000", padding: "3px", fontWeight: "bold", fontFamily: "monospace" }}>{sub.total100}</td>
+              <td style={{ borderRight: "1px solid #000000", padding: "3px", fontWeight: "bold" }}>{sub.grade}</td>
+              <td style={{ padding: "3px", fontWeight: "600", fontSize: "9.5px" }}>{sub.remark}</td>
             </tr>
-            <tr className="border-b border-black font-bold">
-              <th className="border-r border-black p-0.5 w-[8%]">100%</th>
-              <th className="border-r border-black p-0.5 w-[8%]">50%</th>
-              <th className="border-r border-black p-0.5 w-[8%]">100%</th>
-              <th className="border-r border-black p-0.5 w-[8%]">50%</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displaySubjects.map((sub, idx) => (
-              <tr key={idx} className="border-b border-black">
-                <td className="border-r border-black p-1 text-left font-bold">{sub.name}</td>
-                <td className="border-r border-black p-1"></td>
-                <td className="border-r border-black p-1 font-mono">{sub.classWork50}</td>
-                <td className="border-r border-black p-1"></td>
-                <td className="border-r border-black p-1 font-mono">{sub.exam50}</td>
-                <td className="border-r border-black p-1 font-bold font-mono">{sub.total100}</td>
-                <td className="border-r border-black p-1 font-bold">{sub.grade}</td>
-                <td className="p-1 font-semibold text-[10px]">{sub.remark}</td>
-              </tr>
-            ))}
-            <tr className="font-bold border-b border-black">
-              <td className="border-r border-black p-1.5 text-right pr-4" colSpan={5}>TOTAL</td>
-              <td className="border-r border-black p-1 font-mono">{overallTotal}</td>
-              <td className="border-r border-black p-1"></td>
-              <td className="p-1"></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+          ))}
+          <tr style={{ fontWeight: "bold", borderBottom: "1px solid #000000" }}>
+            <td colSpan={5} style={{ borderRight: "1px solid #000000", padding: "4px 8px", textAlign: "right" }}>TOTAL</td>
+            <td style={{ borderRight: "1px solid #000000", padding: "4px", fontFamily: "monospace" }}>{overallTotal}</td>
+            <td style={{ borderRight: "1px solid #000000", padding: "4px" }}></td>
+            <td style={{ padding: "4px" }}></td>
+          </tr>
+        </tbody>
+      </table>
 
-      {/* 5. Attendance Bar */}
-      <div className="border border-black mb-2 text-xs flex justify-between items-center font-bold px-2 py-1">
-        <div className="flex gap-4">
-          <span>LEARNER'S TOTAL ATTENDANCE:</span>
-          <span className="font-normal font-mono">{daysPresent}</span>
-        </div>
-        <div className="flex gap-4">
-          <span>TOTAL SCHOOL DAYS:</span>
-          <span className="font-normal font-mono">{daysOpened}</span>
-        </div>
-      </div>
+      {/* 5. Attendance Bar Table */}
+      <table style={{ width: "100%", border: "1px solid #000000", borderCollapse: "collapse", marginBottom: "6px", fontWeight: "bold" }}>
+        <tbody>
+          <tr>
+            <td style={{ padding: "4px 8px" }}>
+              <span style={{ marginRight: "6px" }}>LEARNER'S TOTAL ATTENDANCE:</span>
+              <span style={{ fontFamily: "monospace", fontWeight: "normal" }}>{daysPresent}</span>
+            </td>
+            <td style={{ padding: "4px 8px", textAlign: "right" }}>
+              <span style={{ marginRight: "6px" }}>TOTAL SCHOOL DAYS:</span>
+              <span style={{ fontFamily: "monospace", fontWeight: "normal" }}>{daysOpened}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       {/* 6. Lower Split Grid: Core Competencies (Left) & Terminal Bills (Right) */}
-      <div className="grid grid-cols-12 gap-2 mb-2 text-xs">
-        {/* Left Side: Core Competencies */}
-        <div className="col-span-7 border border-black text-[11px]">
-          <div className="font-bold text-center border-b border-black p-1 bg-gray-100/50 print:bg-transparent text-[10px]">
-            ASSESSMENT ON CORE COMPETENCIES
-          </div>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-black font-bold text-center">
-                <th className="p-1 border-r border-black text-left">CORE COMPETENCY</th>
-                <th className="p-1 border-r border-black w-[50px]">SCORE</th>
-                <th className="p-1 w-[50px]">GRADE</th>
-              </tr>
-            </thead>
-            <tbody>
-              {coreCompetencies.map((comp, idx) => (
-                <tr key={idx} className="border-b border-black">
-                  <td className="p-1 border-r border-black font-semibold">{comp}</td>
-                  <td className="p-1 border-r border-black text-center"></td>
-                  <td className="p-1 text-center font-bold">{compGrade}</td>
-                </tr>
-              ))}
-              <tr className="font-bold">
-                <td className="p-1 border-r border-black">TOTAL SCORE FOR CORE COMPETENCY</td>
-                <td className="p-1 border-r border-black text-center font-mono">{overallTotal}</td>
-                <td className="p-1"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "6px" }}>
+        <tbody>
+          <tr>
+            {/* Left Side: Core Competencies (58% width) */}
+            <td style={{ width: "58%", verticalAlign: "top", paddingRight: "3px" }}>
+              <table style={{ width: "100%", border: "1px solid #000000", borderCollapse: "collapse", fontSize: "9.5px" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f3f4f6", borderBottom: "1px solid #000000" }}>
+                    <th colSpan={3} style={{ padding: "3px", textAlign: "center", textTransform: "uppercase", fontSize: "9px", fontWeight: "bold" }}>
+                      ASSESSMENT ON CORE COMPETENCIES
+                    </th>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #000000", textAlign: "center", fontWeight: "bold" }}>
+                    <th style={{ padding: "3px 5px", borderRight: "1px solid #000000", textAlign: "left" }}>CORE COMPETENCY</th>
+                    <th style={{ padding: "3px", borderRight: "1px solid #000000", width: "45px" }}>SCORE</th>
+                    <th style={{ padding: "3px", width: "45px" }}>GRADE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coreCompetencies.map((comp, idx) => (
+                    <tr key={idx} style={{ borderBottom: "1px solid #000000" }}>
+                      <td style={{ padding: "3px 5px", borderRight: "1px solid #000000", fontWeight: "600" }}>{comp}</td>
+                      <td style={{ padding: "3px", borderRight: "1px solid #000000", textAlign: "center" }}></td>
+                      <td style={{ padding: "3px", textAlign: "center", fontWeight: "bold" }}>{compGrade}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ fontWeight: "bold" }}>
+                    <td style={{ padding: "3px 5px", borderRight: "1px solid #000000" }}>TOTAL SCORE FOR CORE COMPETENCY</td>
+                    <td style={{ padding: "3px", borderRight: "1px solid #000000", textAlign: "center", fontFamily: "monospace" }}>{overallTotal}</td>
+                    <td style={{ padding: "3px" }}></td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
 
-        {/* Right Side: Terminal Bills */}
-        <div className="col-span-5 border border-black text-[11px]">
-          <div className="font-bold text-center border-b border-black p-1 bg-gray-100/50 print:bg-transparent text-[10px]">
-            TERMINAL BILLS
-          </div>
-          <table className="w-full border-collapse">
-            <tbody>
-              <tr className="border-b border-black">
-                <td className="p-1 border-r border-black font-semibold">SCHOOL FEES</td>
-                <td className="p-1 text-right font-mono font-bold">500</td>
-              </tr>
-              <tr className="border-b border-black">
-                <td className="p-1 border-r border-black font-semibold">SCHOOL FEES ARREARS</td>
-                <td className="p-1 text-right font-mono"></td>
-              </tr>
-              <tr className="border-b border-black">
-                <td className="p-1 border-r border-black font-semibold">CLASSES FEES ARREARS</td>
-                <td className="p-1 text-right font-mono"></td>
-              </tr>
-              <tr className="border-b border-black">
-                <td className="p-1 border-r border-black font-semibold">UNIFORMS ARREARS</td>
-                <td className="p-1 text-right font-mono"></td>
-              </tr>
-              <tr className="border-b border-black">
-                <td className="p-1 border-r border-black font-semibold">FEEDING FEES ARREARS</td>
-                <td className="p-1 text-right font-mono"></td>
-              </tr>
-              <tr className="border-b border-black">
-                <td className="p-1 border-r border-black font-semibold">BOOKS FEE ARREARS</td>
-                <td className="p-1 text-right font-mono"></td>
-              </tr>
-              <tr className="border-b border-black">
-                <td className="p-1 border-r border-black font-semibold">PRINTING FEE ARREARS</td>
-                <td className="p-1 text-right font-mono"></td>
-              </tr>
-              <tr className="font-bold bg-gray-100/50 print:bg-transparent">
-                <td className="p-1 border-r border-black">TOTAL(GHC)</td>
-                <td className="p-1 text-right font-mono font-bold text-sm">500</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+            {/* Right Side: Terminal Bills (42% width) */}
+            <td style={{ width: "42%", verticalAlign: "top", paddingLeft: "3px" }}>
+              <table style={{ width: "100%", border: "1px solid #000000", borderCollapse: "collapse", fontSize: "9.5px" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f3f4f6", borderBottom: "1px solid #000000" }}>
+                    <th colSpan={2} style={{ padding: "3px", textAlign: "center", textTransform: "uppercase", fontSize: "9px", fontWeight: "bold" }}>
+                      TERMINAL BILLS
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: "1px solid #000000" }}>
+                    <td style={{ padding: "3px 5px", borderRight: "1px solid #000000", fontWeight: "600" }}>SCHOOL FEES</td>
+                    <td style={{ padding: "3px 5px", textAlign: "right", fontFamily: "monospace", fontWeight: "bold" }}>500</td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #000000" }}>
+                    <td style={{ padding: "3px 5px", borderRight: "1px solid #000000", fontWeight: "600" }}>SCHOOL FEES ARREARS</td>
+                    <td style={{ padding: "3px 5px", textAlign: "right", fontFamily: "monospace" }}></td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #000000" }}>
+                    <td style={{ padding: "3px 5px", borderRight: "1px solid #000000", fontWeight: "600" }}>CLASSES FEES ARREARS</td>
+                    <td style={{ padding: "3px 5px", textAlign: "right", fontFamily: "monospace" }}></td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #000000" }}>
+                    <td style={{ padding: "3px 5px", borderRight: "1px solid #000000", fontWeight: "600" }}>UNIFORMS ARREARS</td>
+                    <td style={{ padding: "3px 5px", textAlign: "right", fontFamily: "monospace" }}></td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #000000" }}>
+                    <td style={{ padding: "3px 5px", borderRight: "1px solid #000000", fontWeight: "600" }}>FEEDING FEES ARREARS</td>
+                    <td style={{ padding: "3px 5px", textAlign: "right", fontFamily: "monospace" }}></td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #000000" }}>
+                    <td style={{ padding: "3px 5px", borderRight: "1px solid #000000", fontWeight: "600" }}>BOOKS FEE ARREARS</td>
+                    <td style={{ padding: "3px 5px", textAlign: "right", fontFamily: "monospace" }}></td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #000000" }}>
+                    <td style={{ padding: "3px 5px", borderRight: "1px solid #000000", fontWeight: "600" }}>PRINTING FEE ARREARS</td>
+                    <td style={{ padding: "3px 5px", textAlign: "right", fontFamily: "monospace" }}></td>
+                  </tr>
+                  <tr style={{ fontWeight: "bold", backgroundColor: "#f3f4f6" }}>
+                    <td style={{ padding: "3px 5px", borderRight: "1px solid #000000" }}>TOTAL(GHC)</td>
+                    <td style={{ padding: "3px 5px", textAlign: "right", fontFamily: "monospace", fontSize: "11px" }}>500</td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-      {/* 7. Signatures Footer */}
-      <div className="border border-black p-2 text-xs space-y-3">
-        <div className="flex justify-between items-center">
-          <div className="flex gap-2 items-center">
-            <span className="font-bold">Class teacher's Name:</span>
-            <span className="font-bold uppercase italic">MISS EVELYN NYONATOR</span>
-          </div>
-          <div className="flex gap-2 items-center">
-            <span className="font-bold">Head teacher's Name:</span>
-            <span className="font-bold uppercase">STEPHEN K. ADUKOR (SIR ZITO)</span>
-          </div>
-        </div>
-
-        <div className="flex justify-between items-center pt-2">
-          <div><span className="font-bold">Signature:</span> ______________________</div>
-          <div><span className="font-bold">Sign:</span> ______________________</div>
-        </div>
-      </div>
+      {/* 7. Signatures Footer Table */}
+      <table style={{ width: "100%", border: "1px solid #000000", borderCollapse: "collapse", padding: "6px" }}>
+        <tbody>
+          <tr>
+            <td style={{ padding: "6px", width: "50%" }}>
+              <span style={{ fontWeight: "bold", marginRight: "6px" }}>Class teacher's Name:</span>
+              <span style={{ fontWeight: "bold", fontStyle: "italic", textTransform: "uppercase" }}>MISS EVELYN NYONATOR</span>
+            </td>
+            <td style={{ padding: "6px", width: "50%", textAlign: "right" }}>
+              <span style={{ fontWeight: "bold", marginRight: "6px" }}>Head teacher's Name:</span>
+              <span style={{ fontWeight: "bold", textTransform: "uppercase" }}>STEPHEN K. ADUKOR (SIR ZITO)</span>
+            </td>
+          </tr>
+          <tr>
+            <td style={{ padding: "6px 6px 4px 6px" }}>
+              <span style={{ fontWeight: "bold" }}>Signature:</span> ______________________
+            </td>
+            <td style={{ padding: "6px 6px 4px 6px", textAlign: "right" }}>
+              <span style={{ fontWeight: "bold" }}>Sign:</span> ______________________
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
