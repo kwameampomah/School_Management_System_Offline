@@ -18,6 +18,8 @@ const ClassSubjectsPage = React.lazy(() => import('@/pages/admin/class-subjects'
 const UsersPage = React.lazy(() => import('@/pages/admin/users'));
 const TeacherAssignmentsPage = React.lazy(() => import('@/pages/admin/teacher-assignments'));
 const StudentsPage = React.lazy(() => import('@/pages/admin/students'));
+const AttendancePage = React.lazy(() => import('@/pages/teacher/attendance'));
+const FeesPage = React.lazy(() => import('@/pages/admin/fees'));
 const AssessmentComponentsPage = React.lazy(() => import('@/pages/admin/assessment-components'));
 const GradingScalesPage = React.lazy(() => import('@/pages/admin/grading-scales'));
 const ReportCardsPage = React.lazy(() => import('@/pages/admin/report-cards'));
@@ -65,6 +67,12 @@ function Router() {
       <Route path="/admin/students">
         <AppLayout role="admin"><StudentsPage /></AppLayout>
       </Route>
+      <Route path="/admin/attendance">
+        <AppLayout role="admin"><AttendancePage /></AppLayout>
+      </Route>
+      <Route path="/admin/fees">
+        <AppLayout role="admin"><FeesPage /></AppLayout>
+      </Route>
       <Route path="/admin/assessment-components">
         <AppLayout role="admin"><AssessmentComponentsPage /></AppLayout>
       </Route>
@@ -90,6 +98,9 @@ function Router() {
       </Route>
       <Route path="/teacher/students">
         <AppLayout role="teacher"><StudentsPage /></AppLayout>
+      </Route>
+      <Route path="/teacher/attendance">
+        <AppLayout role="teacher"><AttendancePage /></AppLayout>
       </Route>
       <Route path="/teacher/report-cards">
         <AppLayout role="teacher"><ReportCardsPage /></AppLayout>

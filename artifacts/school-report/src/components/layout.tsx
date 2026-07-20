@@ -4,6 +4,7 @@ import { useGetMe, useLogout } from "@workspace/api-client-react";
 import {
   Loader2, LogOut, BookOpen, Users, GraduationCap, LayoutDashboard,
   Settings, FileText, CalendarDays, Menu, X, Sun, Moon, ArrowUpCircle,
+  CalendarCheck, CreditCard,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useTheme } from "@/contexts/theme";
@@ -19,6 +20,8 @@ const navItems = {
     { href: "/admin/users", label: "Users", icon: Users },
     { href: "/admin/teacher-assignments", label: "Teacher Assignments", icon: Users },
     { href: "/admin/students", label: "Students", icon: Users },
+    { href: "/admin/attendance", label: "Attendance & Remarks", icon: CalendarCheck },
+    { href: "/admin/fees", label: "Fees & Billing", icon: CreditCard },
     { href: "/admin/assessment-components", label: "Assessments", icon: FileText },
     { href: "/admin/grading-scales", label: "Grading Scales", icon: Settings },
     { href: "/admin/report-cards", label: "Report Cards", icon: FileText },
@@ -27,6 +30,7 @@ const navItems = {
   teacher: [
     { href: "/teacher", label: "Dashboard", icon: LayoutDashboard },
     { href: "/teacher/students", label: "Students", icon: Users },
+    { href: "/teacher/attendance", label: "Attendance & Remarks", icon: CalendarCheck },
     { href: "/teacher/report-cards", label: "Report Cards", icon: FileText },
   ],
   parent: [
