@@ -75,7 +75,7 @@ async function computeSubjectTotal(
     });
   }
 
-  return { total: Math.round(total * 100) / 100, componentScores };
+  return { total: Math.round(total), componentScores };
 }
 
 // Helper: lookup grade from grading scale
@@ -862,11 +862,11 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
 
     doc.fillColor("#111827").font("Helvetica-Bold").fontSize(6.5).text(sub.subjectName || "", 40, subjectY);
     doc.font("Helvetica").fontSize(7);
-    doc.text(String(classWorkPct), 215, subjectY, { width: 40, align: "center" });
-    doc.text(classWorkWeighted.toFixed(0), 255, subjectY, { width: 40, align: "center" });
-    doc.text(String(examPct), 295, subjectY, { width: 40, align: "center" });
-    doc.text(examWeighted.toFixed(0), 335, subjectY, { width: 40, align: "center" });
-    doc.font("Helvetica-Bold").text(sub.total.toFixed(0), 375, subjectY, { width: 40, align: "center" });
+    doc.text(String(Math.round(classWorkPct)), 215, subjectY, { width: 40, align: "center" });
+    doc.text(String(Math.round(classWorkWeighted)), 255, subjectY, { width: 40, align: "center" });
+    doc.text(String(Math.round(examPct)), 295, subjectY, { width: 40, align: "center" });
+    doc.text(String(Math.round(examWeighted)), 335, subjectY, { width: 40, align: "center" });
+    doc.font("Helvetica-Bold").text(String(Math.round(sub.total)), 375, subjectY, { width: 40, align: "center" });
     doc.text(sub.grade || "N/A", 415, subjectY, { width: 40, align: "center" });
     doc.font("Helvetica").text(sub.remark || "N/A", 460, subjectY);
 
@@ -876,7 +876,7 @@ router.get("/report-cards/:studentId/:termId/export", requireAuth, async (req, r
   // TOTAL Row in Subjects Grid
   doc.moveTo(35, 371).lineTo(560, 371).stroke("#111827");
   doc.font("Helvetica-Bold").fontSize(7.5).text("TOTAL", 40, 373);
-  doc.text(totalScore.toFixed(0), 375, 373, { width: 40, align: "center" });
+  doc.text(String(Math.round(totalScore)), 375, 373, { width: 40, align: "center" });
 
   // Attendance block (y=388 to 400)
   doc.rect(35, 388, 525, 12).stroke("#111827");
