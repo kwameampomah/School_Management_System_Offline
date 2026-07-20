@@ -1,256 +1,316 @@
 import { StudentReportCard } from "@workspace/api-client-react";
-import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Award, Calendar, Bookmark, ShieldCheck } from "lucide-react";
-
-function getGradeColor(grade: string | null | undefined): { bg: string; text: string; border: string } {
-  if (!grade) return { bg: "bg-muted", text: "text-muted-foreground", border: "border-muted" };
-  const g = grade.toUpperCase();
-  if (g.startsWith("A") || g.startsWith("B")) {
-    return { bg: "bg-emerald-50 dark:bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-500/20" };
-  }
-  if (g.startsWith("C")) {
-    return { bg: "bg-teal-50 dark:bg-teal-500/10", text: "text-teal-700 dark:text-teal-400", border: "border-teal-200 dark:border-teal-500/20" };
-  }
-  if (g.startsWith("D") || g.startsWith("E")) {
-    return { bg: "bg-amber-50 dark:bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", border: "border-amber-200 dark:border-amber-500/20" };
-  }
-  return { bg: "bg-rose-50 dark:bg-rose-500/10", text: "text-rose-700 dark:text-rose-400", border: "border-rose-200 dark:border-rose-500/20" };
-}
-
-function getStatusBadge(status: string | null | undefined): { label: string; style: string } {
-  const s = (status || "Draft").toUpperCase();
-  if (s === "PUBLISHED") {
-    return { label: "Published", style: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" };
-  }
-  if (s === "APPROVED") {
-    return { label: "Approved", style: "bg-primary/15 text-primary dark:text-primary-foreground border-primary/20" };
-  }
-  if (s === "SUBMITTED") {
-    return { label: "Submitted", style: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20" };
-  }
-  return { label: "Draft", style: "bg-muted text-muted-foreground border-border" };
-}
 
 export default function StudentReportCardView({ reportCard }: { reportCard: StudentReportCard }) {
   if (!reportCard) return null;
 
-  const totalScore = reportCard.subjectResults?.reduce((acc, s) => acc + s.total, 0) || 0;
-  const statusBadge = getStatusBadge(reportCard.reportCardStatus);
+  const isPrimary = !(reportCard.className || "").toLowerCase().includes("jhs");
+  const overallTotal = reportCard.subjectResults?.reduce((acc, s) => acc + s.total, 0) || 0;
+
+  // SBC Primary grading legend rules
+  const sbcLegend = [
+    { range: "100 - 80", grade: "A", remark: "ADVANCE", desc: "Learner exceeds core requirement in terms of knowledge, skills and understanding and can transfer them automatically and flexibly trough authentic performance tasks" },
+    { range: "79 - 68", grade: "P", remark: "PROFICIENCY", desc: "Learner develops fundamental knowledge, skills and core understanding and transfers them independently through authentic performance tasks" },
+    { range: "67 - 54", grade: "AP", remark: "APPROACHING PROFICIENCY", desc: "Learner develops fundamental knowledge, skills and core understanding; with little guidance; can transfer understanding through authentic performance task" },
+    { range: "53 - 40", grade: "D", remark: "DEVELOPING", desc: "Learner possesses the minimum knowledge and skills but needs, help throughout the performance of authentic tasks." },
+    { range: "39 - Below", grade: "B", remark: "BEGINNING", desc: "Learner is struggling with his/her understanding due to lack of essential knowledge and skills." },
+  ];
+
+  // Default Primary subjects list
+  const primarySubjectsList = [
+    "LITERACY (ENGLISH LANGUAGE)",
+    "NUMERACY (MATHEMATICS)",
+    "SCIENCE",
+    "RELIGIOUS AND MORAL EDUCATION",
+    "HISTORY",
+    "FRENCH",
+    "LITERACY (ASANTE TWI)",
+    "CREATIVE ARTS",
+    "WRITING",
+    "PHYSICAL EDUCATION",
+    "COMPUTING",
+  ];
+
+  // Map results or fallbacks
+  const displaySubjects = isPrimary
+    ? primarySubjectsList.map(name => {
+        const match = reportCard.subjectResults?.find(s => s.subjectName.toUpperCase().trim() === name || name.includes(s.subjectName.toUpperCase().trim()));
+        return {
+          name,
+          classWork50: match ? Math.round(match.total * 0.5) : 0,
+          exam50: match ? Math.round(match.total * 0.5) : 0,
+          total100: match ? match.total : 0,
+          grade: match?.grade || "B",
+          remark: match?.remark || "BEGINNING",
+        };
+      })
+    : (reportCard.subjectResults || []).map(s => ({
+        name: s.subjectName.toUpperCase(),
+        classWork50: Math.round(s.total * 0.5),
+        exam50: Math.round(s.total * 0.5),
+        total100: s.total,
+        grade: s.grade || "B",
+        remark: s.remark || "BEGINNING",
+      }));
+
+  // Core Competencies calculation from terminal average
+  const compAvg = displaySubjects.length > 0 ? overallTotal / displaySubjects.length : 0;
+  const getCompGrade = (val: number) => {
+    if (val >= 80) return "A";
+    if (val >= 68) return "P";
+    if (val >= 54) return "AP";
+    if (val >= 40) return "D";
+    return "B";
+  };
+  const compGrade = getCompGrade(compAvg);
+
+  const coreCompetencies = [
+    "Critical Thinking and Problem Solving",
+    "Creativity and Innovation",
+    "Communication Skills and Collaboration Skills",
+    "Cultural Identity and Global Citizenship",
+    "Personal Development and Leadership Skills",
+    "Digital Literacy",
+  ];
+
+  const daysOpened = reportCard.metadata?.daysOpened ?? 0;
+  const daysPresent = reportCard.metadata?.daysPresent ?? 0;
 
   return (
-    <Card className="overflow-hidden border border-border/80 bg-card/60 backdrop-blur-md shadow-xl print:border-0 print:shadow-none print:m-0 print:p-0 print:bg-white">
-      {/* Decorative top brand line */}
-      <div className="h-2 bg-gradient-to-r from-purple-800 via-purple-500 to-red-500 print:hidden" />
-      
-      <div className="p-5 sm:p-10">
-        {/* Header Section */}
-        <div className="flex flex-col sm:flex-row items-center gap-5 border-b pb-6 mb-8 text-center sm:text-left print:border-b-2 print:border-black">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white rounded-2xl flex items-center justify-center shrink-0 shadow-md border border-border overflow-hidden print:border print:border-black">
-            <img src="/logo.png" alt="Taifa Ebenezer Logo" className="w-16 h-16 sm:w-20 sm:h-20 object-contain" />
+    <div className="w-full max-w-[850px] mx-auto bg-white text-black font-sans p-4 sm:p-8 border border-black shadow-lg print:shadow-none print:border-0 print:p-0">
+      {/* 1. Header Box */}
+      <div className="border border-black p-3 mb-2 flex items-center justify-between text-center">
+        <img src="/logo.png" alt="Logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain" />
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black tracking-wide">TAIFA EBENEZER PREP. & JHS</h1>
+          <p className="text-xs font-semibold">P.O.BOX TA 198</p>
+          <p className="text-xs font-semibold">TAIFA-ACCRA</p>
+          <p className="text-xs font-bold mt-0.5">TEL: 0244085581 / 0245502914</p>
+        </div>
+        <img src="/logo.png" alt="Logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain" />
+      </div>
+
+      {/* 2. Student Bio Section Grid */}
+      <div className="border border-black mb-2 text-xs">
+        <div className="grid grid-cols-12 border-b border-black font-bold text-center bg-gray-100/50">
+          <div className="col-span-8 p-1 text-left uppercase pl-2">
+            END OF {reportCard.termName?.toUpperCase() || "SECOND TERM"} REPORT: {isPrimary ? "PRIMARY" : "JHS"}
           </div>
-          <div className="flex-1 space-y-1">
-            <h1 className="text-xl sm:text-2xl font-black text-primary tracking-wider uppercase print:text-black">
-              Taifa Ebenezer Prep. & J.H.S
-            </h1>
-            <h2 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
-              Terminal Report Card
-            </h2>
-            <div className="flex items-center justify-center sm:justify-start gap-3 mt-2 flex-wrap">
-              <span className="inline-flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <Calendar className="w-3.5 h-3.5 mr-1" /> {reportCard.academicYear}
-              </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hidden sm:inline" />
-              <span className="inline-flex items-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <Bookmark className="w-3.5 h-3.5 mr-1" /> {reportCard.termName}
-              </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 hidden sm:inline" />
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusBadge.style} print:hidden`}>
-                {statusBadge.label}
-              </span>
-            </div>
+          <div className="col-span-4 p-1 border-l border-black flex justify-between px-2">
+            <span>ADMIN N°:</span>
+            <span>{reportCard.studentIdNumber}</span>
           </div>
         </div>
 
-        {/* Student Info Card */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 bg-muted/20 p-5 sm:p-6 rounded-2xl border border-border/80 print:bg-white print:border print:border-black print:rounded-none">
-          <InfoItem label="Student Name" value={reportCard.studentName?.toUpperCase()} highlight />
-          <InfoItem label="Student ID" value={reportCard.studentIdNumber} />
-          <InfoItem label="Class Allocated" value={reportCard.className} />
-          <InfoItem label="Enrolled Term" value={reportCard.termName} />
-        </div>
-
-        {/* Subjects Table */}
-        <div className="mb-8 rounded-2xl overflow-hidden border border-border/60 shadow-sm print:border-black print:rounded-none">
-          <div className="overflow-x-auto">
-            <Table className="min-w-[640px]">
-              <TableHeader>
-                <TableRow className="bg-emerald-950 hover:bg-emerald-950 print:bg-white print:border-b print:border-black">
-                  <TableHead className="text-white font-bold h-11 border-r border-white/10 print:text-black print:border-r print:border-black">Subject & Assessment Breakdown</TableHead>
-                  <TableHead className="text-white font-bold h-11 text-center w-20 border-r border-white/10 print:text-black print:border-r print:border-black">Class Avg</TableHead>
-                  <TableHead className="text-white font-bold h-11 text-center w-20 border-r border-white/10 print:text-black print:border-r print:border-black">Highest</TableHead>
-                  <TableHead className="text-white font-bold h-11 text-center w-20 border-r border-white/10 print:text-black print:border-r print:border-black">Lowest</TableHead>
-                  <TableHead className="text-white font-bold h-11 text-center w-24 border-r border-white/10 print:text-black print:border-r print:border-black">Your Score</TableHead>
-                  <TableHead className="text-white font-bold h-11 text-center w-20 border-r border-white/10 print:text-black print:border-r print:border-black">Position</TableHead>
-                  <TableHead className="text-white font-bold h-11 text-center w-20 border-r border-white/10 print:text-black print:border-r print:border-black">Grade</TableHead>
-                  <TableHead className="text-white font-bold h-11 pl-4 print:text-black">Remarks</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {reportCard.subjectResults?.map((sub, i) => {
-                  const gradeStyles = getGradeColor(sub.grade);
-                  return (
-                    <TableRow key={sub.subjectId} className={`${i % 2 === 0 ? "bg-muted/15" : "bg-background"} hover:bg-muted/30 transition-colors print:bg-white print:border-b print:border-black`}>
-                      <TableCell className="font-bold text-foreground/90 border-r border-border/60 print:border-black py-3">
-                        <div className="text-sm font-bold text-primary dark:text-emerald-400 print:text-black">{sub.subjectName}</div>
-                        {sub.componentScores && sub.componentScores.length > 0 && (
-                          <div className="mt-2 space-y-1 text-xs text-muted-foreground font-normal print:text-black print:font-light max-w-sm">
-                            {sub.componentScores.map(c => (
-                              <div key={c.componentId} className="flex justify-between border-b border-border/20 last:border-0 pb-0.5">
-                                <span>{c.componentName} ({c.weightPercent}%):</span>
-                                <span className="font-mono font-medium text-foreground print:text-black">{c.scoreValue}/{c.maxScore} (w: {c.weightedScore}%)</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center font-mono border-r border-border/60 text-muted-foreground text-sm print:border-black print:text-black">{sub.classAverage}</TableCell>
-                      <TableCell className="text-center font-mono border-r border-border/60 text-muted-foreground text-sm print:border-black print:text-black">{sub.classHighest}</TableCell>
-                      <TableCell className="text-center font-mono border-r border-border/60 text-muted-foreground text-sm print:border-black print:text-black">{sub.classLowest}</TableCell>
-                      <TableCell className="text-center font-black font-mono border-r border-border/60 text-base print:border-black">{sub.total}</TableCell>
-                      <TableCell className="text-center font-mono border-r border-border/60 text-sm print:border-black print:text-black">{sub.subjectRank}/{reportCard.totalStudents}</TableCell>
-                      <TableCell className="text-center font-bold border-r border-border/60 print:border-black" style={{ padding: "6px" }}>
-                        <span className={`inline-block px-3 py-0.5 rounded-md border text-sm font-black ${gradeStyles.bg} ${gradeStyles.text} ${gradeStyles.border} print:bg-white print:text-black print:border-none`}>
-                          {sub.grade}
-                        </span>
-                      </TableCell>
-                      <TableCell className="font-semibold text-sm pl-4 text-muted-foreground print:text-black">{sub.remark}</TableCell>
-                    </TableRow>
-                  );
-                })}
-                {(!reportCard.subjectResults || reportCard.subjectResults.length === 0) && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground italic">
-                      No subject results available for this term.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+        <div className="grid grid-cols-12 border-b border-black">
+          <div className="col-span-9 p-1.5 flex gap-2 font-bold">
+            <span>NAME:</span>
+            <span className="font-normal italic uppercase">{reportCard.studentName}</span>
+          </div>
+          <div className="col-span-3 border-l border-black p-1 text-center font-bold text-[10px] text-gray-500 flex items-center justify-center min-h-[50px]">
+            PASSPORT PICTURE
           </div>
         </div>
 
-        {/* Attendance, Conduct, & Remarks Section */}
-        {reportCard.metadata && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 border-t border-b py-6 print:border-black print:border-t print:border-b">
-            {/* Attendance & Behavioral Traits */}
-            <div className="space-y-4">
-              <h3 className="font-bold text-sm text-primary uppercase tracking-wider border-b pb-2 flex items-center gap-2 print:border-black print:text-black">
-                Attendance & Behavioral Traits
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-muted-foreground">Days Present:</span>
-                  <span className="font-bold font-mono text-foreground print:text-black">
-                    {reportCard.metadata.daysPresent} <span className="font-sans font-normal text-xs text-muted-foreground">of</span> {reportCard.metadata.daysOpened} <span className="font-sans font-normal text-xs text-muted-foreground">({reportCard.metadata.daysOpened > 0 ? Math.round((reportCard.metadata.daysPresent / reportCard.metadata.daysOpened) * 100) : 0}%)</span>
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm border-t border-border/40 pt-2 print:border-black">
-                  <span className="font-semibold text-muted-foreground">General Conduct:</span>
-                  <span className="font-bold capitalize">{reportCard.metadata.conduct || "—"}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm border-t border-border/40 pt-2 print:border-black">
-                  <span className="font-semibold text-muted-foreground">Attitude to Work:</span>
-                  <span className="font-bold capitalize">{reportCard.metadata.attitude || "—"}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm border-t border-border/40 pt-2 print:border-black">
-                  <span className="font-semibold text-muted-foreground">Special Interest:</span>
-                  <span className="font-bold capitalize">{reportCard.metadata.interest || "—"}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* General Assessment Comments */}
-            <div className="space-y-4">
-              <h3 className="font-bold text-sm text-primary uppercase tracking-wider border-b pb-2 flex items-center gap-2 print:border-black print:text-black">
-                General Remarks & Comments
-              </h3>
-              <div className="space-y-4">
-                <div className="text-sm">
-                  <span className="font-bold text-muted-foreground block text-xs uppercase tracking-wider mb-1 print:text-black">Class Teacher's Remarks:</span>
-                  <span className="italic text-foreground print:text-black">"{reportCard.metadata.teacherRemarks || "A hardworking and pleasant student."}"</span>
-                </div>
-                <div className="text-sm border-t border-border/40 pt-3 print:border-black">
-                  <span className="font-bold text-muted-foreground block text-xs uppercase tracking-wider mb-1 print:text-black">Headmaster's Remarks:</span>
-                  <span className="italic text-foreground print:text-black">"{reportCard.metadata.headmasterRemarks || "Satisfactory terminal results. Promoted."}"</span>
-                </div>
-              </div>
-            </div>
+        <div className="grid grid-cols-12 border-b border-black text-center font-semibold">
+          <div className="col-span-3 p-1 border-r border-black flex justify-between px-2">
+            <span className="font-bold">CLASS:</span> <span>{reportCard.className}</span>
           </div>
-        )}
-
-        {/* Summary Details & Signature Block */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-          {/* Performance Summary Card */}
-          <div className="bg-gradient-to-br from-muted/50 to-muted/20 p-6 rounded-2xl border border-border/80 flex flex-col justify-between print:bg-white print:border print:border-black print:rounded-none">
-            <div>
-              <h3 className="font-bold text-base flex items-center gap-2 border-b pb-3 mb-4 print:border-black print:text-black">
-                <Award className="w-4 h-4 text-primary print:text-black" /> Overall Academic Performance
-              </h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-muted-foreground text-sm">Accumulated Score</span>
-                  <span className="font-black font-mono text-lg">{totalScore}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-muted-foreground text-sm">Terminal Average</span>
-                  <span className="font-black font-mono text-lg">{reportCard.overallAverage}%</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-muted-foreground text-sm">Class Position</span>
-                  <span className="font-black font-mono text-lg">
-                    {reportCard.overallPosition}{" "}
-                    <span className="text-xs text-muted-foreground font-sans font-normal">
-                      of {reportCard.totalStudents} students
-                    </span>
-                  </span>
-                </div>
-              </div>
-            </div>
-            {reportCard.reportCardStatus === "published" && (
-              <div className="mt-6 pt-4 border-t border-border flex items-center gap-2 text-xs font-semibold text-primary dark:text-primary print:hidden">
-                <ShieldCheck className="w-4 h-4" /> Authenticated by Taifa Ebenezer School
-              </div>
-            )}
+          <div className="col-span-3 p-1 border-r border-black flex justify-between px-2">
+            <span className="font-bold">Term:</span> <span>{reportCard.termName}</span>
           </div>
+          <div className="col-span-3 p-1 border-r border-black flex justify-between px-2">
+            <span className="font-bold">Class Size:</span> <span>{reportCard.totalStudents || 0}</span>
+          </div>
+          <div className="col-span-3 p-1 flex justify-between px-2">
+            <span className="font-bold">Learner's Total Score:</span> <span>{overallTotal}</span>
+          </div>
+        </div>
 
-          {/* Signature Boxes */}
-          <div className="border border-border/80 p-6 rounded-2xl flex flex-col justify-around gap-6 print:border-black print:rounded-none">
-            <SignatureLine label="Class Teacher's Signature" />
-            <SignatureLine label="Headmaster's Signature" />
+        <div className="grid grid-cols-12 text-center font-semibold">
+          <div className="col-span-6 p-1 border-r border-black flex justify-between px-2">
+            <span className="font-bold">Next Term Re-opening Date:</span> <span>0</span>
+          </div>
+          <div className="col-span-6 p-1 flex justify-between px-2">
+            <span className="font-bold">Vacation date:</span> <span>0</span>
           </div>
         </div>
       </div>
-    </Card>
-  );
-}
 
-function InfoItem({ label, value, highlight = false }: { label: string; value?: string | null; highlight?: boolean }) {
-  return (
-    <div className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0 print:border-black">
-      <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider print:text-black">{label}:</span>
-      <span className={`font-bold text-sm ${highlight ? "text-primary font-black text-base print:text-black" : "text-foreground"}`}>
-        {value || "—"}
-      </span>
-    </div>
-  );
-}
+      {/* 3. Assessment Report Legend Table */}
+      <div className="border border-black mb-2 text-[10px]">
+        <div className="font-bold text-center border-b border-black py-0.5 bg-gray-100/50 uppercase tracking-wider text-xs">
+          ASSESSMENT REPORT
+        </div>
+        <table className="w-full border-collapse text-left">
+          <thead>
+            <tr className="border-b border-black font-bold text-center">
+              <th className="border-r border-black p-1 w-[80px]">MARKS</th>
+              <th className="border-r border-black p-1 w-[60px]">GRADING</th>
+              <th className="border-r border-black p-1 w-[130px]">REMARKS</th>
+              <th className="p-1">GRADE DESCRIPTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sbcLegend.map((item, idx) => (
+              <tr key={idx} className="border-b border-black last:border-0">
+                <td className="border-r border-black p-1 text-center font-bold">{item.range}</td>
+                <td className="border-r border-black p-1 text-center font-bold">{item.grade}</td>
+                <td className="border-r border-black p-1 text-center font-bold">{item.remark}</td>
+                <td className="p-1 leading-tight">{item.desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-function SignatureLine({ label }: { label: string }) {
-  return (
-    <div className="text-center w-full">
-      <div className="h-8 border-b-2 border-dashed border-border/80 w-3/4 mx-auto mb-2 print:border-black" />
-      <p className="font-bold text-xs text-muted-foreground uppercase tracking-wider print:text-black">{label}</p>
+      {/* 4. Subjects Table */}
+      <div className="border border-black mb-2 text-xs">
+        <table className="w-full border-collapse text-center">
+          <thead>
+            <tr className="border-b border-black font-bold">
+              <th className="border-r border-black p-1.5 text-left w-[40%]" rowSpan={2}>SUBJECTS</th>
+              <th className="border-r border-black p-0.5" colSpan={2}>CLASS WORK</th>
+              <th className="border-r border-black p-0.5" colSpan={2}>EXAMINATION</th>
+              <th className="border-r border-black p-0.5" rowSpan={2}>TOTAL<br/>100%</th>
+              <th className="border-r border-black p-0.5" rowSpan={2}>GRADE</th>
+              <th className="p-0.5" rowSpan={2}>REMARK</th>
+            </tr>
+            <tr className="border-b border-black font-bold">
+              <th className="border-r border-black p-0.5 w-[8%]">100%</th>
+              <th className="border-r border-black p-0.5 w-[8%]">50%</th>
+              <th className="border-r border-black p-0.5 w-[8%]">100%</th>
+              <th className="border-r border-black p-0.5 w-[8%]">50%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displaySubjects.map((sub, idx) => (
+              <tr key={idx} className="border-b border-black">
+                <td className="border-r border-black p-1 text-left font-bold">{sub.name}</td>
+                <td className="border-r border-black p-1"></td>
+                <td className="border-r border-black p-1 font-mono">{sub.classWork50}</td>
+                <td className="border-r border-black p-1"></td>
+                <td className="border-r border-black p-1 font-mono">{sub.exam50}</td>
+                <td className="border-r border-black p-1 font-bold font-mono">{sub.total100}</td>
+                <td className="border-r border-black p-1 font-bold">{sub.grade}</td>
+                <td className="p-1 font-semibold text-[10px]">{sub.remark}</td>
+              </tr>
+            ))}
+            <tr className="font-bold border-b border-black">
+              <td className="border-r border-black p-1.5 text-right pr-4" colSpan={5}>TOTAL</td>
+              <td className="border-r border-black p-1 font-mono">{overallTotal}</td>
+              <td className="border-r border-black p-1"></td>
+              <td className="p-1"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* 5. Attendance Bar */}
+      <div className="border border-black mb-2 text-xs flex justify-between items-center font-bold px-2 py-1">
+        <div className="flex gap-4">
+          <span>LEARNER'S TOTAL ATTENDANCE:</span>
+          <span className="font-normal font-mono">{daysPresent}</span>
+        </div>
+        <div className="flex gap-4">
+          <span>TOTAL SCHOOL DAYS:</span>
+          <span className="font-normal font-mono">{daysOpened}</span>
+        </div>
+      </div>
+
+      {/* 6. Lower Split Grid: Core Competencies (Left) & Terminal Bills (Right) */}
+      <div className="grid grid-cols-12 gap-2 mb-2 text-xs">
+        {/* Left Side: Core Competencies */}
+        <div className="col-span-7 border border-black text-[11px]">
+          <div className="font-bold text-center border-b border-black p-1 bg-gray-100/50 text-[10px]">
+            ASSESSMENT ON CORE COMPETENCIES
+          </div>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-black font-bold text-center">
+                <th className="p-1 border-r border-black text-left">CORE COMPETENCY</th>
+                <th className="p-1 border-r border-black w-[50px]">SCORE</th>
+                <th className="p-1 w-[50px]">GRADE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {coreCompetencies.map((comp, idx) => (
+                <tr key={idx} className="border-b border-black">
+                  <td className="p-1 border-r border-black font-semibold">{comp}</td>
+                  <td className="p-1 border-r border-black text-center"></td>
+                  <td className="p-1 text-center font-bold">{compGrade}</td>
+                </tr>
+              ))}
+              <tr className="font-bold">
+                <td className="p-1 border-r border-black">TOTAL SCORE FOR CORE COMPETENCY</td>
+                <td className="p-1 border-r border-black text-center font-mono">{overallTotal}</td>
+                <td className="p-1"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Right Side: Terminal Bills */}
+        <div className="col-span-5 border border-black text-[11px]">
+          <div className="font-bold text-center border-b border-black p-1 bg-gray-100/50 text-[10px]">
+            TERMINAL BILLS
+          </div>
+          <table className="w-full border-collapse">
+            <tbody>
+              <tr className="border-b border-black">
+                <td className="p-1 border-r border-black font-semibold">SCHOOL FEES</td>
+                <td className="p-1 text-right font-mono font-bold">500</td>
+              </tr>
+              <tr className="border-b border-black">
+                <td className="p-1 border-r border-black font-semibold">SCHOOL FEES ARREARS</td>
+                <td className="p-1 text-right font-mono"></td>
+              </tr>
+              <tr className="border-b border-black">
+                <td className="p-1 border-r border-black font-semibold">CLASSES FEES ARREARS</td>
+                <td className="p-1 text-right font-mono"></td>
+              </tr>
+              <tr className="border-b border-black">
+                <td className="p-1 border-r border-black font-semibold">UNIFORMS ARREARS</td>
+                <td className="p-1 text-right font-mono"></td>
+              </tr>
+              <tr className="border-b border-black">
+                <td className="p-1 border-r border-black font-semibold">FEEDING FEES ARREARS</td>
+                <td className="p-1 text-right font-mono"></td>
+              </tr>
+              <tr className="border-b border-black">
+                <td className="p-1 border-r border-black font-semibold">BOOKS FEE ARREARS</td>
+                <td className="p-1 text-right font-mono"></td>
+              </tr>
+              <tr className="border-b border-black">
+                <td className="p-1 border-r border-black font-semibold">PRINTING FEE ARREARS</td>
+                <td className="p-1 text-right font-mono"></td>
+              </tr>
+              <tr className="font-bold bg-gray-100/50">
+                <td className="p-1 border-r border-black">TOTAL(GHC)</td>
+                <td className="p-1 text-right font-mono font-bold text-sm">500</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 7. Signatures Footer */}
+      <div className="border border-black p-2 text-xs space-y-3">
+        <div className="flex justify-between items-center">
+          <div className="flex gap-2 items-center">
+            <span className="font-bold">Class teacher's Name:</span>
+            <span className="font-bold uppercase italic">MISS EVELYN NYONATOR</span>
+          </div>
+          <div className="flex gap-2 items-center">
+            <span className="font-bold">Head teacher's Name:</span>
+            <span className="font-bold uppercase">STEPHEN K. ADUKOR (SIR ZITO)</span>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center pt-2">
+          <div><span className="font-bold">Signature:</span> ______________________</div>
+          <div><span className="font-bold">Sign:</span> ______________________</div>
+        </div>
+      </div>
     </div>
   );
 }
