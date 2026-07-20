@@ -59,21 +59,18 @@ echo.
 echo [4/4] Starting Local Servers...
 
 :: Start the API Server (port 8085)
-start /min "Offline API Server" cmd /c "title API Server (SQLite) && cd /d %~dp0 && pnpm --filter @workspace/api-server run dev"
+start /min "Offline API Server" cmd /k "title API Server (SQLite) && cd /d %~dp0 && pnpm --filter @workspace/api-server run dev"
 
-:: Wait for API to be ready by polling the health endpoint (up to 60 seconds)
+:: Wait for API to be ready by checking if port 8085 is listening (up to 30 seconds)
 echo Waiting for API server to be ready...
-set API_READY=0
 set count=0
 
 :POLL_LOOP
-if !API_READY!==1 goto START_FRONTEND
-if !count! GEQ 60 goto START_FRONTEND_TIMEOUT
+if !count! GEQ 30 goto START_FRONTEND_TIMEOUT
 
 set /a count+=1
-powershell -NonInteractive -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8085/api/health' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop; if($r.StatusCode -eq 200){ exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
-if !errorlevel!==0 (
-    set API_READY=1
+netstat -aon | findstr :8085 | findstr LISTENING >nul 2>&1
+if !errorlevel! equ 0 (
     echo API server is ready.
     goto START_FRONTEND
 )
@@ -82,12 +79,12 @@ ping -n 2 127.0.0.1 >nul
 goto POLL_LOOP
 
 :START_FRONTEND_TIMEOUT
-echo [WARNING] API server did not respond within 60 seconds. Starting frontend anyway...
+echo [WARNING] API server check timed out. Starting frontend anyway...
 
 :START_FRONTEND
 :: Start the Frontend Server (port 3000)
-start /min "Offline Frontend Server" cmd /c "title Frontend Server && cd /d %~dp0 && set PORT=3000&& set BASE_PATH=/&& pnpm --filter @workspace/school-report run dev"
-ping -n 6 127.0.0.1 >nul
+start /min "Offline Frontend Server" cmd /k "title Frontend Server && cd /d %~dp0 && set PORT=3000&& set BASE_PATH=/&& pnpm --filter @workspace/school-report run dev"
+ping -n 5 127.0.0.1 >nul
 
 :: Launch browser to login page
 echo.
