@@ -217,9 +217,9 @@ async function main() {
           classSubjectId: classSubj.id,
           termId: termId,
           name: comp.name,
-          maxScore: comp.maxScore.toFixed(2),
-          weightPercent: comp.weightPercent.toFixed(2)
-        }).returning();
+          maxScore: comp.maxScore,
+          weightPercent: comp.weightPercent
+        } as any).returning();
         insertedComps.push({
           id: insertedComp.id,
           name: insertedComp.name,
@@ -264,7 +264,7 @@ async function main() {
 
   // 9. Seeding Grading Scale
   console.log("Seeding grading scale...");
-  await db.insert(gradingScaleTable).values([
+  const scales = [
     { minScore: "80.00", maxScore: "100.00", gradeLabel: "A1", remark: "Highest / Superior" },
     { minScore: "75.00", maxScore: "79.99", gradeLabel: "B2", remark: "Higher" },
     { minScore: "70.00", maxScore: "74.99", gradeLabel: "B3", remark: "Good" },
@@ -274,7 +274,11 @@ async function main() {
     { minScore: "50.00", maxScore: "54.99", gradeLabel: "D7", remark: "Low" },
     { minScore: "40.00", maxScore: "49.99", gradeLabel: "E8", remark: "Pass" },
     { minScore: "0.00", maxScore: "39.99", gradeLabel: "F9", remark: "Lowest" },
-  ]);
+  ];
+
+  for (const scale of scales) {
+    await db.insert(gradingScaleTable).values(scale as any);
+  }
 
   console.log("Database seeding completed successfully! Added all Primary & JHS subjects and classes.");
   process.exit(0);

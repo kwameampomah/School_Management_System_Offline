@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db, studentsTable, auditLogsTable } from "@workspace/db";
 import { requireAdmin } from "../middlewares/auth";
 import { validate } from "../middlewares/validation";

@@ -79,7 +79,11 @@ async function computeSubjectTotal(
 }
 
 // Helper: lookup grade from grading scale
-async function lookupGrade(total: number, isPrimary: boolean = false): Promise<{ grade: string; remark: string }> {
+async function lookupGrade(
+  total: number,
+  isPrimary: boolean = false,
+  cachedScales?: Array<{ minScore: any; maxScore: any; gradeLabel: string; remark: string }>
+): Promise<{ grade: string; remark: string }> {
   if (isPrimary) {
     if (total >= 80) return { grade: "A", remark: "ADVANCE" };
     if (total >= 68) return { grade: "P", remark: "PROFICIENCY" };
@@ -87,7 +91,7 @@ async function lookupGrade(total: number, isPrimary: boolean = false): Promise<{
     if (total >= 40) return { grade: "D", remark: "DEVELOPING" };
     return { grade: "B", remark: "BEGINNING" };
   }
-  const scales = await db.select().from(gradingScaleTable);
+  const scales = cachedScales || await db.select().from(gradingScaleTable);
   for (const scale of scales) {
     const min = parseFloat(scale.minScore as unknown as string);
     const max = parseFloat(scale.maxScore as unknown as string);
@@ -372,6 +376,9 @@ router.get("/report-cards/:studentId/:termId", requireAuth, async (req, res): Pr
     .leftJoin(subjectsTable, eq(classSubjectsTable.subjectId, subjectsTable.id))
     .where(eq(classSubjectsTable.classId, student.classId!));
 
+  // Pre-fetch grading scale ONCE for caching
+  const cachedGradingScales = await db.select().from(gradingScaleTable);
+
   // Get all students in this class for ranking
   const classStudents = await db
     .select({ id: studentsTable.id })
@@ -397,10 +404,11 @@ router.get("/report-cards/:studentId/:termId", requireAuth, async (req, res): Pr
   const overallAverage = Math.round((studentTotals[studentId] ?? 0) * 100) / 100;
 
   // Subject results with class stats and per-subject rankings
+  const isPrimaryClass = student.className ? !student.className.startsWith("JHS") : false;
   const subjectResults = [];
   for (const subj of classSubjects) {
     const { total, componentScores } = await computeSubjectTotal(studentId, subj.id, termId);
-    const { grade, remark } = await lookupGrade(total);
+    const { grade, remark } = await lookupGrade(total, isPrimaryClass, cachedGradingScales);
 
     // Class stats for this subject
     const subjectTotals: number[] = [];

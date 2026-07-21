@@ -104,6 +104,37 @@ router.post("/fees/types", requireAdmin, validate(CreateFeeTypeSchema), async (r
   }
 });
 
+// DELETE a fee category (Admin only with orphan protection check)
+router.delete("/fees/types/:id", requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  try {
+    const assignedRecords = await db
+      .select({ id: studentFeesTable.id })
+      .from(studentFeesTable)
+      .where(eq(studentFeesTable.feeTypeId, id));
+
+    if (assignedRecords.length > 0) {
+      res.status(400).json({ error: "Cannot delete fee category because it is assigned to active student fee accounts." });
+      return;
+    }
+
+    const [deleted] = await db
+      .delete(feeTypesTable)
+      .where(eq(feeTypesTable.id, id))
+      .returning();
+
+    if (!deleted) {
+      res.status(404).json({ error: "Fee category not found" });
+      return;
+    }
+
+    res.json({ ok: true });
+  } catch (error: unknown) {
+    console.error("Failed to delete fee type:", error);
+    res.status(500).json({ error: "Failed to delete fee category" });
+  }
+});
+
 // 3. POST bulk assign fee type to students in a class (Admin only)
 router.post("/fees/assign-bulk", requireAdmin, validate(AssignBulkFeesSchema), async (req, res): Promise<void> => {
   const { classId, termId, feeTypeId, amount, dueDate } = req.body;
@@ -427,7 +458,8 @@ router.post("/fees/assign-individual", requireAdmin, validate(AssignIndividualFe
 
 // 7. PUT update an existing student fee line item (Admin only)
 router.put("/fees/student-fee/:id", requireAdmin, validate(UpdateStudentFeeSchema), async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const idStr = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(idStr as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid student fee ID" });
     return;
@@ -478,7 +510,8 @@ router.put("/fees/student-fee/:id", requireAdmin, validate(UpdateStudentFeeSchem
 
 // 8. DELETE a student fee line item (Admin only)
 router.delete("/fees/student-fee/:id", requireAdmin, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const idStr = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(idStr as string, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid student fee ID" });
     return;
