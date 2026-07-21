@@ -24,7 +24,6 @@ export default function ReportCardAdvanced({ reportCard }: ReportCardAdvancedPro
   if (!reportCard) return null;
 
   const isPrimary = !(reportCard.className || "").toLowerCase().includes("jhs");
-  const overallTotal = Math.round(reportCard.subjectResults?.reduce((acc, s) => acc + s.total, 0) || 0);
 
   // SBC Primary grading legend rules
   const sbcLegend = [
@@ -50,31 +49,74 @@ export default function ReportCardAdvanced({ reportCard }: ReportCardAdvancedPro
     "COMPUTING",
   ];
 
-  // Map results or fallbacks
+  // Map results & calculate component scores accurately
   const displaySubjects = isPrimary
     ? primarySubjectsList.map(name => {
-        const match = reportCard.subjectResults?.find(s => s.subjectName.toUpperCase().trim() === name || name.includes(s.subjectName.toUpperCase().trim()));
-        const score100 = match ? Math.round(match.total) : 0;
+        const match = reportCard.subjectResults?.find(s => 
+          s.subjectName.toUpperCase().trim() === name || 
+          name.includes(s.subjectName.toUpperCase().trim())
+        );
+
+        if (match) {
+          const classWorkComp = match.componentScores?.find(c => c.componentName.toLowerCase().includes("class") || c.componentName.toLowerCase().includes("sba"));
+          const examComp = match.componentScores?.find(c => c.componentName.toLowerCase().includes("exam") || c.componentName.toLowerCase().includes("test"));
+
+          const classWork100 = classWorkComp ? Math.round((classWorkComp.scoreValue / classWorkComp.maxScore) * 100) : (match.total ? Math.round(match.total) : "");
+          const classWork50 = classWorkComp ? Math.round(classWorkComp.weightedScore) : (match.total ? Math.round(match.total * 0.5) : 0);
+
+          const exam100 = examComp ? Math.round((examComp.scoreValue / examComp.maxScore) * 100) : (match.total ? Math.round(match.total) : "");
+          const exam50 = examComp ? Math.round(examComp.weightedScore) : (match.total ? Math.round(match.total * 0.5) : 0);
+
+          const total100 = classWork50 + exam50;
+
+          return {
+            name,
+            classWork100: classWork100 !== "" ? classWork100 : "",
+            classWork50,
+            exam100: exam100 !== "" ? exam100 : "",
+            exam50,
+            total100,
+            grade: match.grade || "B",
+            remark: match.remark || "BEGINNING",
+          };
+        }
+
         return {
           name,
-          classWork50: Math.round(score100 * 0.5),
-          exam50: Math.round(score100 * 0.5),
-          total100: score100,
-          grade: match?.grade || "B",
-          remark: match?.remark || "BEGINNING",
+          classWork100: "",
+          classWork50: 0,
+          exam100: "",
+          exam50: 0,
+          total100: 0,
+          grade: "B",
+          remark: "BEGINNING",
         };
       })
     : (reportCard.subjectResults || []).map(s => {
-        const score100 = Math.round(s.total);
+        const classWorkComp = s.componentScores?.find(c => c.componentName.toLowerCase().includes("class") || c.componentName.toLowerCase().includes("sba"));
+        const examComp = s.componentScores?.find(c => c.componentName.toLowerCase().includes("exam") || c.componentName.toLowerCase().includes("test"));
+
+        const classWork100 = classWorkComp ? Math.round((classWorkComp.scoreValue / classWorkComp.maxScore) * 100) : Math.round(s.total);
+        const classWork50 = classWorkComp ? Math.round(classWorkComp.weightedScore) : Math.round(s.total * 0.5);
+
+        const exam100 = examComp ? Math.round((examComp.scoreValue / examComp.maxScore) * 100) : Math.round(s.total);
+        const exam50 = examComp ? Math.round(examComp.weightedScore) : Math.round(s.total * 0.5);
+
+        const total100 = classWork50 + exam50;
+
         return {
           name: s.subjectName.toUpperCase(),
-          classWork50: Math.round(score100 * 0.5),
-          exam50: Math.round(score100 * 0.5),
-          total100: score100,
+          classWork100,
+          classWork50,
+          exam100,
+          exam50,
+          total100,
           grade: s.grade || "B",
           remark: s.remark || "BEGINNING",
         };
       });
+
+  const overallTotal = Math.round(displaySubjects.reduce((acc, s) => acc + s.total100, 0));
 
   // Core Competencies calculation from terminal average
   const compAvg = displaySubjects.length > 0 ? overallTotal / displaySubjects.length : 0;
@@ -408,9 +450,9 @@ export default function ReportCardAdvanced({ reportCard }: ReportCardAdvancedPro
             {displaySubjects.map((sub, idx) => (
               <tr key={idx} style={{ borderBottom: "1px solid #000000" }}>
                 <td style={{ borderRight: "1px solid #000000", padding: "2.5px 4px", textAlign: "left", fontWeight: "bold" }}>{sub.name}</td>
-                <td style={{ borderRight: "1px solid #000000", padding: "2.5px" }}></td>
+                <td style={{ borderRight: "1px solid #000000", padding: "2.5px", fontFamily: "monospace" }}>{sub.classWork100}</td>
                 <td style={{ borderRight: "1px solid #000000", padding: "2.5px", fontFamily: "monospace" }}>{sub.classWork50}</td>
-                <td style={{ borderRight: "1px solid #000000", padding: "2.5px" }}></td>
+                <td style={{ borderRight: "1px solid #000000", padding: "2.5px", fontFamily: "monospace" }}>{sub.exam100}</td>
                 <td style={{ borderRight: "1px solid #000000", padding: "2.5px", fontFamily: "monospace" }}>{sub.exam50}</td>
                 <td style={{ borderRight: "1px solid #000000", padding: "2.5px", fontWeight: "bold", fontFamily: "monospace" }}>{sub.total100}</td>
                 <td style={{ borderRight: "1px solid #000000", padding: "2.5px", fontWeight: "bold" }}>{sub.grade}</td>
