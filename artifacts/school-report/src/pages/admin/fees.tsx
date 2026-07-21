@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useListClasses, useListTerms, useListStudents } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -73,8 +73,21 @@ export default function FeesPage() {
   const [paymentNotes, setPaymentNotes] = useState("");
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
 
+  // Reset student selection when class changes
+  useEffect(() => {
+    setSelectedStudentId("");
+    setStudentFees([]);
+  }, [searchClassId]);
+
+  // Auto select first student when roster loads
+  useEffect(() => {
+    if (students && students.length > 0 && !selectedStudentId) {
+      setSelectedStudentId(students[0].id.toString());
+    }
+  }, [students, selectedStudentId]);
+
   // Load Fee Categories
-  const fetchFeeTypes = async () => {
+  const fetchFeeTypes = useCallback(async () => {
     setIsLoadingFeeTypes(true);
     try {
       const res = await fetch("/api/fees/types");
@@ -87,11 +100,11 @@ export default function FeesPage() {
     } finally {
       setIsLoadingFeeTypes(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchFeeTypes();
-  }, []);
+  }, [fetchFeeTypes]);
 
   // Set default term selection
   useEffect(() => {
@@ -102,10 +115,10 @@ export default function FeesPage() {
         if (!searchTermId) setSearchTermId(activeTerm.id.toString());
       }
     }
-  }, [terms]);
+  }, [terms, billTermId, searchTermId]);
 
   // Load Student Fees when student & term are selected
-  const fetchStudentFees = async () => {
+  const fetchStudentFees = useCallback(async () => {
     if (!selectedStudentId || !searchTermId) return;
 
     setIsLoadingStudentFees(true);
@@ -120,11 +133,11 @@ export default function FeesPage() {
     } finally {
       setIsLoadingStudentFees(false);
     }
-  };
+  }, [selectedStudentId, searchTermId, toast]);
 
   useEffect(() => {
     fetchStudentFees();
-  }, [selectedStudentId, searchTermId]);
+  }, [fetchStudentFees]);
 
   // Create Fee Type Handler
   const handleCreateType = async () => {

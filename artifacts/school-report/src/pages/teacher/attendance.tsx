@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useGetMe, useListClasses, useListAcademicYears, useListTerms, useListStudents } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -65,43 +65,48 @@ export default function AttendancePage() {
     selectedClassId ? { classId: parseInt(selectedClassId, 10) } : undefined
   );
 
-  // Fetch existing term metadata for selected class & term
+  // Stable metadata fetch function
+  const fetchMetadata = useCallback(async (classId: string, termId: string, studentList: any[]) => {
+    if (!classId || !termId || !studentList || studentList.length === 0) {
+      setRows([]);
+      return;
+    }
+
+    setIsLoadingMetadata(true);
+    try {
+      const res = await fetch(`/api/student-term-metadata?termId=${termId}&classId=${classId}`);
+      if (!res.ok) throw new Error("Failed to load attendance metadata");
+      const existingData: any[] = await res.json();
+
+      const initialRows: StudentMetadataState[] = studentList.map(s => {
+        const match = existingData.find(e => e.studentId === s.id);
+        return {
+          studentId: s.id,
+          studentName: s.fullName,
+          studentIdNumber: s.studentIdNumber,
+          daysOpened: match?.daysOpened ?? 65,
+          daysPresent: match?.daysPresent ?? 65,
+          conduct: match?.conduct ?? "Good",
+          attitude: match?.attitude ?? "Attentive",
+          interest: match?.interest ?? "High",
+          teacherRemarks: match?.teacherRemarks ?? "A hardworking and pleasant student.",
+        };
+      });
+
+      setRows(initialRows);
+    } catch (err: unknown) {
+      toast({ variant: "destructive", title: "Failed to load metadata records" });
+    } finally {
+      setIsLoadingMetadata(false);
+    }
+  }, [toast]);
+
+  // Fetch existing term metadata when class, term, or student list changes safely
   useEffect(() => {
-    if (!selectedClassId || !selectedTermId || !students) return;
-
-    const fetchMetadata = async () => {
-      setIsLoadingMetadata(true);
-      try {
-        const res = await fetch(`/api/student-term-metadata?termId=${selectedTermId}&classId=${selectedClassId}`);
-        if (!res.ok) throw new Error("Failed to load attendance metadata");
-        const existingData: any[] = await res.json();
-
-        // Merge student list with existing metadata records
-        const initialRows: StudentMetadataState[] = students.map(s => {
-          const match = existingData.find(e => e.studentId === s.id);
-          return {
-            studentId: s.id,
-            studentName: s.fullName,
-            studentIdNumber: s.studentIdNumber,
-            daysOpened: match?.daysOpened ?? 65,
-            daysPresent: match?.daysPresent ?? 65,
-            conduct: match?.conduct ?? "Good",
-            attitude: match?.attitude ?? "Attentive",
-            interest: match?.interest ?? "High",
-            teacherRemarks: match?.teacherRemarks ?? "A hardworking and pleasant student.",
-          };
-        });
-
-        setRows(initialRows);
-      } catch (err: unknown) {
-        toast({ variant: "destructive", title: "Failed to load metadata records" });
-      } finally {
-        setIsLoadingMetadata(false);
-      }
-    };
-
-    fetchMetadata();
-  }, [selectedClassId, selectedTermId, students, toast]);
+    if (selectedClassId && selectedTermId && students) {
+      fetchMetadata(selectedClassId, selectedTermId, students);
+    }
+  }, [selectedClassId, selectedTermId, students, fetchMetadata]);
 
   const handleRowChange = (studentId: number, field: keyof StudentMetadataState, value: any) => {
     setRows(prev =>
@@ -153,165 +158,174 @@ export default function AttendancePage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
-            <CalendarCheck className="w-6 h-6 text-primary" />
-            Attendance & Behavioral Remarks
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <CalendarCheck className="w-7 h-7 text-primary" /> Attendance & Remarks Management
           </h1>
           <p className="text-muted-foreground text-sm">
-            Record student attendance days, conduct, attitude, and report card remarks.
+            Batch enter learner attendance days, conduct, attitude, interest, and term teacher remarks.
           </p>
         </div>
-        <Button onClick={handleSaveAll} disabled={isSaving || rows.length === 0} className="shrink-0">
+        <Button onClick={handleSaveAll} disabled={isSaving || rows.length === 0} size="lg" className="shrink-0 shadow-md">
           {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
           Save All Changes
         </Button>
       </div>
 
-      {/* Filter Controls */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-            <div className="space-y-2">
-              <Label>Class</Label>
-              <Select value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)}>
-                <option value="">Select Class...</option>
-                {allowedClasses.map(c => (
-                  <option key={c.id} value={c.id.toString()}>{c.name}</option>
-                ))}
-              </Select>
-            </div>
+      {/* Filter Options */}
+      <Card className="border border-border/80 shadow-sm">
+        <CardContent className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Select Class</Label>
+            <Select value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)}>
+              {allowedClasses.map(c => (
+                <option key={c.id} value={c.id.toString()}>{c.name}</option>
+              ))}
+            </Select>
+          </div>
 
-            <div className="space-y-2">
-              <Label>Academic Term</Label>
-              <Select value={selectedTermId} onChange={e => setSelectedTermId(e.target.value)}>
-                <option value="">Select Term...</option>
-                {terms?.map(t => (
-                  <option key={t.id} value={t.id.toString()}>
-                    {t.name} {t.isCurrent ? "(Current)" : ""}
-                  </option>
-                ))}
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Select Academic Term</Label>
+            <Select value={selectedTermId} onChange={(e) => setSelectedTermId(e.target.value)}>
+              {terms?.map(t => (
+                <option key={t.id} value={t.id.toString()}>{t.name} ({t.academicYearLabel})</option>
+              ))}
+            </Select>
+          </div>
 
-            {rows.length > 0 && (
-              <div className="space-y-2">
-                <Label>Set Total Days Opened (All)</Label>
-                <Input
-                  type="number"
-                  placeholder="e.g. 65"
-                  onChange={e => {
-                    const val = parseInt(e.target.value, 10);
-                    if (!isNaN(val)) handleBulkDaysOpenedChange(val);
-                  }}
-                />
-              </div>
-            )}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Set Total School Days for All</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min="1"
+                placeholder="65"
+                defaultValue={rows[0]?.daysOpened || 65}
+                onChange={(e) => handleBulkDaysOpenedChange(parseInt(e.target.value, 10) || 65)}
+                className="w-28 font-mono"
+              />
+              <span className="text-xs text-muted-foreground">Days</span>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Grid Editor Table */}
-      <Card>
-        <CardContent className="pt-6">
+      {/* Attendance & Remarks Grid Table */}
+      <Card className="border border-border/80 shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/40 px-6 py-4 border-b border-border/60">
+          <CardTitle className="text-base font-semibold flex items-center justify-between">
+            <span>Student Term Records ({rows.length})</span>
+            {isLoadingMetadata && <span className="text-xs text-muted-foreground flex items-center"><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Loading data...</span>}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0 overflow-x-auto">
           {isLoadingStudents || isLoadingMetadata ? (
-            <div className="py-12 text-center">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mt-2">Loading student attendance records...</p>
+            <div className="py-16 text-center text-muted-foreground">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-primary" />
+              Loading student roster...
             </div>
           ) : rows.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground">
-              No students found for the selected class and term.
+            <div className="py-16 text-center text-muted-foreground">
+              No students found in the selected class.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table className="min-w-[900px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[180px]">Student</TableHead>
-                    <TableHead className="w-[100px]">Days Open</TableHead>
-                    <TableHead className="w-[100px]">Present</TableHead>
-                    <TableHead className="w-[130px]">Conduct</TableHead>
-                    <TableHead className="w-[130px]">Attitude</TableHead>
-                    <TableHead className="w-[130px]">Interest</TableHead>
-                    <TableHead>Teacher Remarks</TableHead>
+            <Table>
+              <TableHeader className="bg-muted/30">
+                <TableRow>
+                  <TableHead className="w-12 text-center">#</TableHead>
+                  <TableHead className="w-48">Student Name</TableHead>
+                  <TableHead className="w-24 text-center">Days Opened</TableHead>
+                  <TableHead className="w-24 text-center">Days Present</TableHead>
+                  <TableHead className="w-32">Conduct</TableHead>
+                  <TableHead className="w-32">Attitude</TableHead>
+                  <TableHead className="w-32">Interest</TableHead>
+                  <TableHead>Teacher's Remarks</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row, idx) => (
+                  <TableRow key={row.studentId} className="hover:bg-muted/20">
+                    <TableCell className="text-center font-mono text-xs text-muted-foreground">{idx + 1}</TableCell>
+                    <TableCell>
+                      <div className="font-semibold text-sm">{row.studentName}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{row.studentIdNumber}</div>
+                    </TableCell>
+
+                    <TableCell className="text-center">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={row.daysOpened}
+                        onChange={(e) => handleRowChange(row.studentId, "daysOpened", parseInt(e.target.value, 10) || 0)}
+                        className="w-20 mx-auto text-center font-mono text-sm"
+                      />
+                    </TableCell>
+
+                    <TableCell className="text-center">
+                      <Input
+                        type="number"
+                        min="0"
+                        max={row.daysOpened}
+                        value={row.daysPresent}
+                        onChange={(e) => handleRowChange(row.studentId, "daysPresent", parseInt(e.target.value, 10) || 0)}
+                        className="w-20 mx-auto text-center font-mono text-sm font-semibold text-emerald-700 dark:text-emerald-400"
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Select
+                        value={row.conduct}
+                        onChange={(e) => handleRowChange(row.studentId, "conduct", e.target.value)}
+                        className="text-xs"
+                      >
+                        <option value="Excellent">Excellent</option>
+                        <option value="Good">Good</option>
+                        <option value="Satisfactory">Satisfactory</option>
+                        <option value="Needs Imp.">Needs Imp.</option>
+                      </Select>
+                    </TableCell>
+
+                    <TableCell>
+                      <Select
+                        value={row.attitude}
+                        onChange={(e) => handleRowChange(row.studentId, "attitude", e.target.value)}
+                        className="text-xs"
+                      >
+                        <option value="Enthusiastic">Enthusiastic</option>
+                        <option value="Attentive">Attentive</option>
+                        <option value="Distracted">Distracted</option>
+                        <option value="Passive">Passive</option>
+                      </Select>
+                    </TableCell>
+
+                    <TableCell>
+                      <Select
+                        value={row.interest}
+                        onChange={(e) => handleRowChange(row.studentId, "interest", e.target.value)}
+                        className="text-xs"
+                      >
+                        <option value="High">High</option>
+                        <option value="Average">Average</option>
+                        <option value="Developing">Developing</option>
+                      </Select>
+                    </TableCell>
+
+                    <TableCell>
+                      <Input
+                        type="text"
+                        value={row.teacherRemarks}
+                        onChange={(e) => handleRowChange(row.studentId, "teacherRemarks", e.target.value)}
+                        placeholder="Enter remarks..."
+                        className="text-xs"
+                      />
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map(row => (
-                    <TableRow key={row.studentId}>
-                      <TableCell>
-                        <div className="font-medium text-sm">{row.studentName}</div>
-                        <div className="font-mono text-xs text-muted-foreground">{row.studentIdNumber}</div>
-                      </TableCell>
-
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={row.daysOpened}
-                          onChange={e => handleRowChange(row.studentId, "daysOpened", parseInt(e.target.value, 10) || 0)}
-                          className="w-20"
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={row.daysPresent}
-                          onChange={e => handleRowChange(row.studentId, "daysPresent", parseInt(e.target.value, 10) || 0)}
-                          className="w-20"
-                        />
-                      </TableCell>
-
-                      <TableCell>
-                        <Select
-                          value={row.conduct}
-                          onChange={e => handleRowChange(row.studentId, "conduct", e.target.value)}
-                        >
-                          <option value="Excellent">Excellent</option>
-                          <option value="Good">Good</option>
-                          <option value="Satisfactory">Satisfactory</option>
-                          <option value="Needs Improvement">Needs Imp.</option>
-                        </Select>
-                      </TableCell>
-
-                      <TableCell>
-                        <Select
-                          value={row.attitude}
-                          onChange={e => handleRowChange(row.studentId, "attitude", e.target.value)}
-                        >
-                          <option value="Enthusiastic">Enthusiastic</option>
-                          <option value="Attentive">Attentive</option>
-                          <option value="Distracted">Distracted</option>
-                          <option value="Passive">Passive</option>
-                        </Select>
-                      </TableCell>
-
-                      <TableCell>
-                        <Select
-                          value={row.interest}
-                          onChange={e => handleRowChange(row.studentId, "interest", e.target.value)}
-                        >
-                          <option value="High">High</option>
-                          <option value="Average">Average</option>
-                          <option value="Developing">Developing</option>
-                        </Select>
-                      </TableCell>
-
-                      <TableCell>
-                        <Input
-                          value={row.teacherRemarks}
-                          onChange={e => handleRowChange(row.studentId, "teacherRemarks", e.target.value)}
-                          placeholder="Class Teacher Remarks for Report Card..."
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
