@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, CalendarCheck, CheckCircle2 } from "lucide-react";
+import { Loader2, Save, CalendarCheck } from "lucide-react";
 
 interface StudentMetadataState {
   studentId: number;
@@ -45,13 +45,14 @@ export default function AttendancePage() {
     return [];
   }, [classes, user]);
 
-  // Set default selection
+  // Set default class selection
   useEffect(() => {
     if (allowedClasses.length > 0 && !selectedClassId) {
       setSelectedClassId(allowedClasses[0].id.toString());
     }
   }, [allowedClasses, selectedClassId]);
 
+  // Set default term selection
   useEffect(() => {
     if (terms && terms.length > 0 && !selectedTermId) {
       const activeTerm = terms.find(t => t.isCurrent) || terms[0];
@@ -61,52 +62,64 @@ export default function AttendancePage() {
     }
   }, [terms, selectedTermId]);
 
-  const { data: students, isLoading: isLoadingStudents } = useListStudents(
-    selectedClassId ? { classId: parseInt(selectedClassId, 10) } : undefined
-  );
+  // Memoize query params to avoid object reference churn
+  const studentsQueryParams = useMemo(() => {
+    return selectedClassId ? { classId: parseInt(selectedClassId, 10) } : undefined;
+  }, [selectedClassId]);
 
-  // Stable metadata fetch function
-  const fetchMetadata = useCallback(async (classId: string, termId: string, studentList: any[]) => {
-    if (!classId || !termId || !studentList || studentList.length === 0) {
-      setRows([]);
+  const { data: students, isLoading: isLoadingStudents } = useListStudents(studentsQueryParams);
+
+  // Create primitive string key for student list to prevent infinite re-fetches
+  const studentIdsKey = useMemo(() => {
+    return students ? students.map(s => s.id).join(",") : "";
+  }, [students]);
+
+  // Fetch existing term metadata for selected class & term
+  useEffect(() => {
+    if (!selectedClassId || !selectedTermId || !students || students.length === 0) {
+      if (students && students.length === 0) setRows([]);
       return;
     }
 
+    let isMounted = true;
     setIsLoadingMetadata(true);
-    try {
-      const res = await fetch(`/api/student-term-metadata?termId=${termId}&classId=${classId}`);
-      if (!res.ok) throw new Error("Failed to load attendance metadata");
-      const existingData: any[] = await res.json();
 
-      const initialRows: StudentMetadataState[] = studentList.map(s => {
-        const match = existingData.find(e => e.studentId === s.id);
-        return {
-          studentId: s.id,
-          studentName: s.fullName,
-          studentIdNumber: s.studentIdNumber,
-          daysOpened: match?.daysOpened ?? 65,
-          daysPresent: match?.daysPresent ?? 65,
-          conduct: match?.conduct ?? "Good",
-          attitude: match?.attitude ?? "Attentive",
-          interest: match?.interest ?? "High",
-          teacherRemarks: match?.teacherRemarks ?? "A hardworking and pleasant student.",
-        };
+    fetch(`/api/student-term-metadata?termId=${selectedTermId}&classId=${selectedClassId}`)
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to load metadata");
+        return res.json();
+      })
+      .then((existingData: any[]) => {
+        if (!isMounted) return;
+        const initialRows: StudentMetadataState[] = students.map(s => {
+          const match = existingData.find(e => e.studentId === s.id);
+          return {
+            studentId: s.id,
+            studentName: s.fullName,
+            studentIdNumber: s.studentIdNumber,
+            daysOpened: match?.daysOpened ?? 65,
+            daysPresent: match?.daysPresent ?? 65,
+            conduct: match?.conduct ?? "Good",
+            attitude: match?.attitude ?? "Attentive",
+            interest: match?.interest ?? "High",
+            teacherRemarks: match?.teacherRemarks ?? "A hardworking and pleasant student.",
+          };
+        });
+        setRows(initialRows);
+      })
+      .catch(() => {
+        if (isMounted) {
+          toast({ variant: "destructive", title: "Failed to load metadata records" });
+        }
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingMetadata(false);
       });
 
-      setRows(initialRows);
-    } catch (err: unknown) {
-      toast({ variant: "destructive", title: "Failed to load metadata records" });
-    } finally {
-      setIsLoadingMetadata(false);
-    }
-  }, [toast]);
-
-  // Fetch existing term metadata when class, term, or student list changes safely
-  useEffect(() => {
-    if (selectedClassId && selectedTermId && students) {
-      fetchMetadata(selectedClassId, selectedTermId, students);
-    }
-  }, [selectedClassId, selectedTermId, students, fetchMetadata]);
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedClassId, selectedTermId, studentIdsKey]); // Depend strictly on primitives!
 
   const handleRowChange = (studentId: number, field: keyof StudentMetadataState, value: any) => {
     setRows(prev =>
@@ -222,7 +235,7 @@ export default function AttendancePage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          {isLoadingStudents || isLoadingMetadata ? (
+          {isLoadingStudents || (isLoadingMetadata && rows.length === 0) ? (
             <div className="py-16 text-center text-muted-foreground">
               <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-primary" />
               Loading student roster...
