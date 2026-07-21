@@ -73,4 +73,5 @@ overrides:
 
 allowBuilds:
   '@scarf/scarf': false
+  core-js: set this to true or false
   esbuild: true

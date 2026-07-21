@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, ArrowLeft, Printer, MessageSquare, Mail, Settings2, Download } from "lucide-react";
-import StudentReportCardView from "@/components/StudentReportCardView";
+import ReportCardAdvanced from "@/components/ReportCardAdvanced";
 
 export default function ClassReportCardsPage() {
   const [, params] = useRoute("/admin/report-cards/:classId/:termId");
@@ -157,7 +157,7 @@ export default function ClassReportCardsPage() {
             </Card>
 
             {/* Printout Report View */}
-            <StudentReportCardView reportCard={rc} />
+            <ReportCardAdvanced reportCard={rc} />
           </div>
         ))}
       </div>
