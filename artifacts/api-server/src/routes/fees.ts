@@ -40,12 +40,25 @@ const RecordPaymentSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Payment date must be YYYY-MM-DD")
     .refine(
-      (d) => new Date(d) <= new Date(),
+      (d) => d <= new Date().toISOString().split("T")[0],
       "Payment date cannot be in the future"
     ),
   paymentMethod: z.enum(["cash", "bank_transfer", "momo"]),
   reference: z.string().max(100).optional().nullable(),
   notes: z.string().max(500).optional().nullable()
+});
+
+const AssignIndividualFeeSchema = z.object({
+  studentId: z.number().int().positive(),
+  termId: z.number().int().positive(),
+  feeTypeId: z.number().int().positive(),
+  amount: z.number().positive(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Due date must be in YYYY-MM-DD format").optional().nullable()
+});
+
+const UpdateStudentFeeSchema = z.object({
+  amountDue: z.number().positive().optional(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Due date must be in YYYY-MM-DD format").optional().nullable()
 });
 
 // 1. GET all global fee categories (Admin only)
@@ -167,6 +180,7 @@ router.post("/fees/assign-bulk", requireAdmin, validate(AssignBulkFeesSchema), a
 
     res.status(201).json({
       success: true,
+      assignedCount: studentsToBill.length,
       message: `Successfully assigned fee to ${studentsToBill.length} students.`
     });
   } catch (error: unknown) {
@@ -340,6 +354,7 @@ router.get("/fees/student/:studentId/:termId", requireAuth, async (req, res): Pr
         id: studentFeesTable.id,
         feeTypeId: studentFeesTable.feeTypeId,
         feeName: feeTypesTable.name,
+        feeTypeName: feeTypesTable.name,
         amountDue: studentFeesTable.amountDue,
         amountPaid: studentFeesTable.amountPaid,
         isPaid: studentFeesTable.isPaid,
@@ -379,6 +394,112 @@ router.get("/fees/student/:studentId/:termId", requireAuth, async (req, res): Pr
   } catch (error: unknown) {
     console.error("Failed to fetch student billing details:", error);
     res.status(500).json({ error: "Failed to fetch student billing details" });
+  }
+});
+
+// 6. POST assign fee to an individual student (Admin only)
+router.post("/fees/assign-individual", requireAdmin, validate(AssignIndividualFeeSchema), async (req, res): Promise<void> => {
+  const { studentId, termId, feeTypeId, amount, dueDate } = req.body;
+  const adminId = req.session.userId ?? null;
+
+  try {
+    const [inserted] = await db
+      .insert(studentFeesTable)
+      .values({
+        studentId,
+        termId,
+        feeTypeId,
+        amountDue: String(amount),
+        amountPaid: "0.00",
+        isPaid: false,
+        dueDate: dueDate ?? null
+      })
+      .returning();
+
+    await logAudit(adminId, "INSERT", "student_fees", inserted.id, null, JSON.stringify(inserted));
+
+    res.status(201).json(inserted);
+  } catch (error: unknown) {
+    console.error("Assign individual fee failed:", error);
+    res.status(500).json({ error: "Failed to assign fee to student" });
+  }
+});
+
+// 7. PUT update an existing student fee line item (Admin only)
+router.put("/fees/student-fee/:id", requireAdmin, validate(UpdateStudentFeeSchema), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid student fee ID" });
+    return;
+  }
+
+  const { amountDue, dueDate } = req.body;
+  const adminId = req.session.userId ?? null;
+
+  try {
+    const [fee] = await db.select().from(studentFeesTable).where(eq(studentFeesTable.id, id));
+    if (!fee) {
+      res.status(404).json({ error: "Student fee record not found" });
+      return;
+    }
+
+    const updates: Record<string, unknown> = {
+      updatedAt: new Date().toISOString()
+    };
+
+    if (dueDate !== undefined) {
+      updates.dueDate = dueDate;
+    }
+
+    if (amountDue !== undefined) {
+      const paidNum = parseFloat(fee.amountPaid);
+      if (amountDue < paidNum) {
+        res.status(400).json({ error: `Amount due (GH₵ ${amountDue.toFixed(2)}) cannot be less than amount already paid (GH₵ ${paidNum.toFixed(2)})` });
+        return;
+      }
+      updates.amountDue = String(amountDue);
+      updates.isPaid = paidNum >= amountDue;
+    }
+
+    const [updated] = await db
+      .update(studentFeesTable)
+      .set(updates)
+      .where(eq(studentFeesTable.id, id))
+      .returning();
+
+    await logAudit(adminId, "UPDATE", "student_fees", id, JSON.stringify(fee), JSON.stringify(updated));
+
+    res.json(updated);
+  } catch (error: unknown) {
+    console.error("Update student fee failed:", error);
+    res.status(500).json({ error: "Failed to update student fee record" });
+  }
+});
+
+// 8. DELETE a student fee line item (Admin only)
+router.delete("/fees/student-fee/:id", requireAdmin, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid student fee ID" });
+    return;
+  }
+
+  const adminId = req.session.userId ?? null;
+
+  try {
+    const [fee] = await db.select().from(studentFeesTable).where(eq(studentFeesTable.id, id));
+    if (!fee) {
+      res.status(404).json({ error: "Student fee record not found" });
+      return;
+    }
+
+    await db.delete(studentFeesTable).where(eq(studentFeesTable.id, id));
+    await logAudit(adminId, "DELETE", "student_fees", id, JSON.stringify(fee), null);
+
+    res.json({ success: true, message: "Fee line item deleted successfully" });
+  } catch (error: unknown) {
+    console.error("Delete student fee failed:", error);
+    res.status(500).json({ error: "Failed to delete student fee record" });
   }
 });
 

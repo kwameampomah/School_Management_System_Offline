@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, CreditCard, DollarSign, CheckCircle2, AlertCircle, Calendar } from "lucide-react";
+import { Loader2, Plus, CreditCard, DollarSign, Receipt, Pencil, Trash2 } from "lucide-react";
 
 interface FeeType {
   id: number;
@@ -22,11 +22,22 @@ interface FeeType {
 interface StudentFeeItem {
   id: number;
   feeTypeId: number;
-  feeTypeName: string;
-  amountDue: string;
-  amountPaid: string;
+  feeName?: string;
+  feeTypeName?: string;
+  amountDue: string | number;
+  amountPaid: string | number;
   isPaid: boolean;
   dueDate: string | null;
+}
+
+interface FeePaymentItem {
+  id: number;
+  studentFeeId: number;
+  amountPaid: string | number;
+  paymentDate: string;
+  paymentMethod: "cash" | "bank_transfer" | "momo";
+  reference: string | null;
+  notes: string | null;
 }
 
 export default function FeesPage() {
@@ -61,7 +72,25 @@ export default function FeesPage() {
   );
 
   const [studentFees, setStudentFees] = useState<StudentFeeItem[]>([]);
+  const [feePayments, setFeePayments] = useState<FeePaymentItem[]>([]);
   const [isLoadingStudentFees, setIsLoadingStudentFees] = useState(false);
+
+  // Individual Student Fee Assignment Dialog State
+  const [isIndividualFeeDialogOpen, setIsIndividualFeeDialogOpen] = useState(false);
+  const [indFeeTypeId, setIndFeeTypeId] = useState("");
+  const [indAmount, setIndAmount] = useState("");
+  const [indDueDate, setIndDueDate] = useState("");
+  const [isAssigningIndividual, setIsAssigningIndividual] = useState(false);
+
+  // Edit Fee Line Item Dialog State
+  const [isEditFeeDialogOpen, setIsEditFeeDialogOpen] = useState(false);
+  const [editingFeeItem, setEditingFeeItem] = useState<StudentFeeItem | null>(null);
+  const [editAmountDue, setEditAmountDue] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [isUpdatingFee, setIsUpdatingFee] = useState(false);
+
+  // Delete Fee Line Item State
+  const [deletingFeeId, setDeletingFeeId] = useState<number | null>(null);
 
   // Record Payment Dialog State
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
@@ -77,6 +106,7 @@ export default function FeesPage() {
   useEffect(() => {
     setSelectedStudentId("");
     setStudentFees([]);
+    setFeePayments([]);
   }, [searchClassId]);
 
   // Auto select first student when roster loads
@@ -126,7 +156,8 @@ export default function FeesPage() {
       const res = await fetch(`/api/fees/student/${selectedStudentId}/${searchTermId}`);
       if (res.ok) {
         const data = await res.json();
-        setStudentFees(data);
+        setStudentFees(Array.isArray(data.invoices) ? data.invoices : []);
+        setFeePayments(Array.isArray(data.payments) ? data.payments : []);
       }
     } catch (err: unknown) {
       toast({ variant: "destructive", title: "Failed to load student fee records" });
@@ -196,9 +227,10 @@ export default function FeesPage() {
       if (!res.ok) throw new Error(await res.text());
 
       const result = await res.json();
+      const count = result.assignedCount ?? 0;
       toast({
         title: "Class Billed Successfully",
-        description: `Billed ${result.assignedCount} students GH₵ ${parseFloat(billAmount).toFixed(2)}.`,
+        description: result.message || `Billed ${count} students GH₵ ${parseFloat(billAmount).toFixed(2)}.`,
       });
 
       setBillAmount("");
@@ -209,6 +241,110 @@ export default function FeesPage() {
       toast({ variant: "destructive", title: "Billing Failed", description: errMsg });
     } finally {
       setIsAssigningBulk(false);
+    }
+  };
+
+  // Individual Student Fee Assignment Handler
+  const handleAssignIndividual = async () => {
+    if (!selectedStudentId || !searchTermId || !indFeeTypeId || !indAmount) {
+      return toast({ variant: "destructive", title: "Select Fee Category and enter Amount" });
+    }
+
+    setIsAssigningIndividual(true);
+    try {
+      const res = await fetch("/api/fees/assign-individual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: parseInt(selectedStudentId, 10),
+          termId: parseInt(searchTermId, 10),
+          feeTypeId: parseInt(indFeeTypeId, 10),
+          amount: parseFloat(indAmount),
+          dueDate: indDueDate || undefined,
+        }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      toast({
+        title: "Fee Line Item Added",
+        description: `Successfully added line item of GH₵ ${parseFloat(indAmount).toFixed(2)}.`,
+      });
+
+      setIsIndividualFeeDialogOpen(false);
+      setIndFeeTypeId("");
+      setIndAmount("");
+      setIndDueDate("");
+      fetchStudentFees();
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "Failed to add fee line item";
+      toast({ variant: "destructive", title: "Assignment Error", description: errMsg });
+    } finally {
+      setIsAssigningIndividual(false);
+    }
+  };
+
+  // Edit Fee Line Item Handler
+  const handleUpdateFeeItem = async () => {
+    if (!editingFeeItem || !editAmountDue) {
+      return toast({ variant: "destructive", title: "Amount Due is required" });
+    }
+
+    setIsUpdatingFee(true);
+    try {
+      const res = await fetch(`/api/fees/student-fee/${editingFeeItem.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amountDue: parseFloat(editAmountDue),
+          dueDate: editDueDate || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Update failed" }));
+        throw new Error(errorData.error || "Failed to update fee line item");
+      }
+
+      toast({
+        title: "Fee Line Item Updated",
+        description: `Updated fee line item amount to GH₵ ${parseFloat(editAmountDue).toFixed(2)}.`,
+      });
+
+      setIsEditFeeDialogOpen(false);
+      setEditingFeeItem(null);
+      fetchStudentFees();
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "Failed to update fee line item";
+      toast({ variant: "destructive", title: "Update Error", description: errMsg });
+    } finally {
+      setIsUpdatingFee(false);
+    }
+  };
+
+  // Delete Fee Line Item Handler
+  const handleDeleteFeeItem = async (feeId: number) => {
+    if (!confirm("Are you sure you want to delete this fee line item?")) return;
+
+    setDeletingFeeId(feeId);
+    try {
+      const res = await fetch(`/api/fees/student-fee/${feeId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      toast({
+        title: "Fee Line Item Deleted",
+        description: "Successfully removed line item from student profile.",
+      });
+
+      fetchStudentFees();
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "Failed to delete fee line item";
+      toast({ variant: "destructive", title: "Delete Error", description: errMsg });
+    } finally {
+      setDeletingFeeId(null);
     }
   };
 
@@ -233,7 +369,10 @@ export default function FeesPage() {
         }),
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Payment failed" }));
+        throw new Error(errorData.error || "Failed to record payment");
+      }
 
       toast({
         title: "Payment Recorded",
@@ -254,10 +393,14 @@ export default function FeesPage() {
     }
   };
 
-  // Calculate Total Billed, Paid, and Arrears for selected student
-  const totalBilled = studentFees.reduce((acc, f) => acc + parseFloat(f.amountDue), 0);
-  const totalPaid = studentFees.reduce((acc, f) => acc + parseFloat(f.amountPaid), 0);
-  const totalArrears = totalBilled - totalPaid;
+  // Safe numerical calculations for total billed, paid, and arrears
+  const totalBilled = Array.isArray(studentFees)
+    ? studentFees.reduce((acc, f) => acc + (typeof f.amountDue === "number" ? f.amountDue : parseFloat(f.amountDue) || 0), 0)
+    : 0;
+  const totalPaid = Array.isArray(studentFees)
+    ? studentFees.reduce((acc, f) => acc + (typeof f.amountPaid === "number" ? f.amountPaid : parseFloat(f.amountPaid) || 0), 0)
+    : 0;
+  const totalArrears = Math.max(0, totalBilled - totalPaid);
 
   return (
     <div className="space-y-6">
@@ -345,8 +488,11 @@ export default function FeesPage() {
 
               {/* Fee Breakdown Table */}
               <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-lg">Fee Line Items</CardTitle>
+                  <Button size="sm" onClick={() => setIsIndividualFeeDialogOpen(true)}>
+                    <Plus className="w-4 h-4 mr-1" /> Add Fee Line Item
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   {isLoadingStudentFees ? (
@@ -361,23 +507,28 @@ export default function FeesPage() {
                           <TableHead>Amount Due</TableHead>
                           <TableHead>Amount Paid</TableHead>
                           <TableHead>Balance</TableHead>
+                          <TableHead>Due Date</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Action</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {studentFees.map(fee => {
-                          const due = parseFloat(fee.amountDue);
-                          const paid = parseFloat(fee.amountPaid);
-                          const bal = due - paid;
+                          const due = typeof fee.amountDue === "number" ? fee.amountDue : parseFloat(fee.amountDue) || 0;
+                          const paid = typeof fee.amountPaid === "number" ? fee.amountPaid : parseFloat(fee.amountPaid) || 0;
+                          const bal = Math.max(0, due - paid);
+                          const name = fee.feeTypeName || fee.feeName || "Fee Category";
 
                           return (
                             <TableRow key={fee.id}>
-                              <TableCell className="font-medium">{fee.feeTypeName}</TableCell>
+                              <TableCell className="font-medium">{name}</TableCell>
                               <TableCell>GH₵ {due.toFixed(2)}</TableCell>
                               <TableCell>GH₵ {paid.toFixed(2)}</TableCell>
                               <TableCell className={bal > 0 ? "font-semibold text-destructive" : "text-muted-foreground"}>
                                 GH₵ {bal.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-sm">
+                                {fee.dueDate ? fee.dueDate : "No due date"}
                               </TableCell>
                               <TableCell>
                                 {fee.isPaid ? (
@@ -389,17 +540,45 @@ export default function FeesPage() {
                                 )}
                               </TableCell>
                               <TableCell className="text-right">
-                                <Button
-                                  size="sm"
-                                  disabled={fee.isPaid}
-                                  onClick={() => {
-                                    setPaymentFeeItem(fee);
-                                    setPaymentAmount(bal.toString());
-                                    setIsPaymentDialogOpen(true);
-                                  }}
-                                >
-                                  <DollarSign className="w-4 h-4 mr-1" /> Record Payment
-                                </Button>
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    size="sm"
+                                    disabled={fee.isPaid}
+                                    onClick={() => {
+                                      setPaymentFeeItem(fee);
+                                      setPaymentAmount(bal.toString());
+                                      setIsPaymentDialogOpen(true);
+                                    }}
+                                  >
+                                    <DollarSign className="w-4 h-4 mr-1" /> Pay
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingFeeItem(fee);
+                                      setEditAmountDue(due.toString());
+                                      setEditDueDate(fee.dueDate || "");
+                                      setIsEditFeeDialogOpen(true);
+                                    }}
+                                    title="Edit Line Item"
+                                  >
+                                    <Pencil className="w-4 h-4 text-muted-foreground" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    onClick={() => handleDeleteFeeItem(fee.id)}
+                                    disabled={deletingFeeId === fee.id}
+                                    title="Delete Line Item"
+                                  >
+                                    {deletingFeeId === fee.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin text-destructive" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4 text-destructive" />
+                                    )}
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
@@ -409,6 +588,47 @@ export default function FeesPage() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Payment History Receipts */}
+              {feePayments.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Receipt className="w-5 h-5 text-primary" />
+                      Payment Receipts & History
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Payment Date</TableHead>
+                          <TableHead>Method</TableHead>
+                          <TableHead>Reference / TxID</TableHead>
+                          <TableHead>Notes</TableHead>
+                          <TableHead className="text-right">Amount Paid</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {feePayments.map(payment => {
+                          const amt = typeof payment.amountPaid === "number" ? payment.amountPaid : parseFloat(payment.amountPaid) || 0;
+                          return (
+                            <TableRow key={payment.id}>
+                              <TableCell className="font-medium">{payment.paymentDate}</TableCell>
+                              <TableCell className="capitalize">{payment.paymentMethod.replace("_", " ")}</TableCell>
+                              <TableCell>{payment.reference || "-"}</TableCell>
+                              <TableCell className="text-muted-foreground text-sm">{payment.notes || "-"}</TableCell>
+                              <TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                GH₵ {amt.toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </TabsContent>
@@ -551,9 +771,15 @@ export default function FeesPage() {
           {paymentFeeItem && (
             <div className="space-y-4 py-4">
               <div className="bg-muted/40 p-3 rounded-lg text-sm">
-                <div className="font-semibold">{paymentFeeItem.feeTypeName}</div>
+                <div className="font-semibold">{paymentFeeItem.feeTypeName || paymentFeeItem.feeName || "Fee"}</div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Remaining Balance: GH₵ {(parseFloat(paymentFeeItem.amountDue) - parseFloat(paymentFeeItem.amountPaid)).toFixed(2)}
+                  Remaining Balance: GH₵ {(
+                    Math.max(
+                      0,
+                      (typeof paymentFeeItem.amountDue === "number" ? paymentFeeItem.amountDue : parseFloat(paymentFeeItem.amountDue) || 0) -
+                      (typeof paymentFeeItem.amountPaid === "number" ? paymentFeeItem.amountPaid : parseFloat(paymentFeeItem.amountPaid) || 0)
+                    )
+                  ).toFixed(2)}
                 </div>
               </div>
 
@@ -580,11 +806,92 @@ export default function FeesPage() {
                 <Label>Transaction Reference</Label>
                 <Input value={paymentReference} onChange={e => setPaymentReference(e.target.value)} placeholder="e.g. Receipt # or MoMo TxID" />
               </div>
+
+              <div className="space-y-2">
+                <Label>Notes (Optional)</Label>
+                <Input value={paymentNotes} onChange={e => setPaymentNotes(e.target.value)} placeholder="Additional payment notes..." />
+              </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleRecordPayment} disabled={isRecordingPayment}>Submit Payment</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal 3: Add Individual Fee Line Item */}
+      <Dialog open={isIndividualFeeDialogOpen} onOpenChange={setIsIndividualFeeDialogOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle>Add Fee Line Item to Student</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Fee Category *</Label>
+              <Select
+                value={indFeeTypeId}
+                onChange={e => {
+                  setIndFeeTypeId(e.target.value);
+                  const selectedCategory = feeTypes.find(ft => ft.id === parseInt(e.target.value, 10));
+                  if (selectedCategory) setIndAmount(selectedCategory.amount);
+                }}
+              >
+                <option value="">Select Category...</option>
+                {feeTypes.map(ft => (
+                  <option key={ft.id} value={ft.id.toString()}>
+                    {ft.name} (Std: GH₵ {parseFloat(ft.amount).toFixed(2)})
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Amount Due (GH₵) *</Label>
+              <Input type="number" step="0.01" value={indAmount} onChange={e => setIndAmount(e.target.value)} placeholder="0.00" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Due Date (Optional)</Label>
+              <Input type="date" value={indDueDate} onChange={e => setIndDueDate(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsIndividualFeeDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleAssignIndividual} disabled={isAssigningIndividual}>Add Line Item</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal 4: Edit Fee Line Item */}
+      <Dialog open={isEditFeeDialogOpen} onOpenChange={setIsEditFeeDialogOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Fee Line Item</DialogTitle>
+          </DialogHeader>
+          {editingFeeItem && (
+            <div className="space-y-4 py-4">
+              <div className="bg-muted/40 p-3 rounded-lg text-sm">
+                <div className="font-semibold">{editingFeeItem.feeTypeName || editingFeeItem.feeName || "Fee Category"}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Amount Already Paid: GH₵ {(typeof editingFeeItem.amountPaid === "number" ? editingFeeItem.amountPaid : parseFloat(editingFeeItem.amountPaid) || 0).toFixed(2)}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Amount Due (GH₵) *</Label>
+                <Input type="number" step="0.01" value={editAmountDue} onChange={e => setEditAmountDue(e.target.value)} />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Due Date</Label>
+                <Input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditFeeDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdateFeeItem} disabled={isUpdatingFee}>Update Line Item</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
